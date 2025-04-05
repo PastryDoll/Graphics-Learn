@@ -1,7 +1,11 @@
+#include "texture.hpp"
 #include "shader.hpp"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <math.h>
+#include "../thirdparty/glm/glm.hpp"
+#include "../thirdparty/glm/gtc/matrix_transform.hpp"
+#include "../thirdparty/glm/gtc/type_ptr.hpp"
 
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
@@ -28,6 +32,10 @@ int main(void)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
+
     window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE, NULL, NULL);
     if (!window)
     {   
@@ -43,18 +51,28 @@ int main(void)
 		printf("Failed to initialize GLAD\n");
         return -1;
     }
-    
+
+    // Create Shaders
+    Shader simple_rectangle = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
+
+    // Create Textures
+    Texture crate = createTextureFromFile("assets/textures/container.jpg");
+    Texture face = createTextureFromFile("assets/textures/awesomeface.png");
+
+    // Meshs Data
     float vertices[] = {
-        0.5f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f, // top right
-        0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // bottom right
-       -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // bottom left
-       -0.5f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f // top left 
-   };
-   unsigned int indices[] = {  // note that we start from 0!
+        // positions          // colors           // texture coords
+        0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
+        0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
+        -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
+        -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // top left 
+    };
+    unsigned int indices[] = {  
        0, 1, 3,   // first triangle
        1, 2, 3    // second triangle
-   };    
+    };    
     
+    // Build VAOs
     unsigned int VAO;
     glGenVertexArrays(1, &VAO); 
     glBindVertexArray(VAO);
@@ -64,22 +82,37 @@ int main(void)
     glBindBuffer(GL_ARRAY_BUFFER, VBO);  
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    // Vertices
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3* sizeof(float)));
+    // Color
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3* sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    // Texture Coord
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);  
     
+    // Indices
     unsigned int EBO;
     glGenBuffers(1, &EBO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-
+    
     glBindVertexArray(0);
 
-    Shader simple_rectangle = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
-    
+    // Transformations
+
+    // Shaders Uniforms
+
+    useShader(simple_rectangle);
+        setInt(simple_rectangle, "texture1", 0);
+        setInt(simple_rectangle, "texture2", 1);
+    useShader({0});
+
+    // Game Loop
     glViewport(0, 0, WINDOW_WIDTH , WINDOW_HEIGHT);
     glClearColor(0.1f, 0.1f, 0.3f, 1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -89,13 +122,16 @@ int main(void)
         
         glClear(GL_COLOR_BUFFER_BIT);
         
-        // float timeValue = glfwGetTime();
-        // float greenValue = sin(timeValue*10) / 2.0f + 0.5f;
-        // int vertexColorLocation = glGetUniformLocation(shaderProgram, "color");
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, crate.ID);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, face.ID);
+
+        glm::mat4 transform = glm::mat4(1.0f); 
+        transform = glm::rotate(transform, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+
         useShader(simple_rectangle);
-        // glUniform4f(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f); // This is set for the current shader program
-
-
+        setMat4(simple_rectangle, "transform",  glm::value_ptr(transform));
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         
