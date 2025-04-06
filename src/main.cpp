@@ -1,27 +1,31 @@
 #include "texture.hpp"
 #include "shader.hpp"
+#include "camera.hpp"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <math.h>
-#include "../thirdparty/glm/glm.hpp"
-#include "../thirdparty/glm/gtc/matrix_transform.hpp"
 #include "../thirdparty/glm/gtc/type_ptr.hpp"
 
-#define WINDOW_WIDTH 640
-#define WINDOW_HEIGHT 480
-#define WINDOW_TITLE "Hello World"
+// TODO: Find better way to force NVIDIA GPU
+// Substack: "you should use WGL_NV_gpu_affinity"
+#ifdef _WIN32 
+extern "C" {
+    _declspec(dllexport) int NvOptimusEnablement = 1;
+    _declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+#endif
 
-// camera
-glm::vec3 cameraPos   = glm::vec3(0.0f, 0.0f,  3.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
+#define WINDOW_TITLE "Hello World"
 
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-float lastX = (float) WINDOW_WIDTH/2.0f, lastY = (float)WINDOW_HEIGHT/2.0f;
-float yaw   = -90.0f;	// yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
-float pitch =  0.0f;
+// camera
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+float lastX = (float) WINDOW_WIDTH/2.0f;
+float lastY = (float)WINDOW_HEIGHT/2.0f;
 bool firstMouse = true;
 
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
@@ -34,49 +38,41 @@ void processInput(GLFWwindow *window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    float cameraSpeed = static_cast<float>(2.5 * deltaTime);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        cameraPos += cameraSpeed * cameraFront;
+        ProcessKeyboard(camera,FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        cameraPos -= cameraSpeed * cameraFront;
+        ProcessKeyboard(camera,BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        ProcessKeyboard(camera,LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        ProcessKeyboard(camera,RIGHT, deltaTime);
 }
 
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
+
     if (firstMouse)
     {
         lastX = xpos;
         lastY = ypos;
         firstMouse = false;
     }
-  
+
     float xoffset = xpos - lastX;
     float yoffset = lastY - ypos; 
+
     lastX = xpos;
     lastY = ypos;
 
-    float sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
+    ProcessMouseMovement(camera, xoffset, yoffset);
+}
 
-    yaw   += xoffset;
-    pitch += yoffset;
-
-    if(pitch > 89.0f)
-        pitch = 89.0f;
-    if(pitch < -89.0f)
-        pitch = -89.0f;
-
-    glm::vec3 direction;
-    direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    direction.y = sin(glm::radians(pitch));
-    direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    cameraFront = glm::normalize(direction);
-}  
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    ProcessMouseScroll(camera, static_cast<float>(yoffset));
+}
 
 int main(void)
 {
@@ -103,14 +99,24 @@ int main(void)
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);  
+
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
 		printf("Failed to initialize GLAD\n");
         return -1;
     }
-
+    // Openg GL Config
+    glViewport(0, 0, WINDOW_WIDTH , WINDOW_HEIGHT);
+    glClearColor(0.1f, 0.1f, 0.3f, 1.0f);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glEnable(GL_DEPTH_TEST);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);  
+
+    const GLubyte* renderer = glGetString(GL_RENDERER);
+    const GLubyte* vendor = glGetString(GL_VENDOR);
+    printf("Renderer: %s\n", renderer);
+    printf("Vendor: %s\n", vendor);
 
     // Create Shaders
     Shader simple_rectangle = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
@@ -219,11 +225,6 @@ int main(void)
         setInt(simple_rectangle, "texture2", 1);
     useShader({0});
 
-    // Openg GL Config
-    glViewport(0, 0, WINDOW_WIDTH , WINDOW_HEIGHT);
-    glClearColor(0.1f, 0.1f, 0.3f, 1.0f);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
     while (!glfwWindowShouldClose(window))
     {
         int screen_width, screen_height;
@@ -245,22 +246,20 @@ int main(void)
         glm::mat4 transform = glm::mat4(1.0f); 
         transform = glm::rotate(transform, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
 
-
         useShader(simple_rectangle);
         
-        // Transformations WVP
+        // Transformations Model/Projection  -------------------------------------
         glm::mat4 model         = glm::mat4(1.0f); 
-        glm::mat4 projection    = glm::mat4(1.0f);
-
-        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-
         model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
-
-        projection = glm::perspective(glm::radians(45.0f), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
         
-        setMat4(simple_rectangle, "view",  glm::value_ptr(view));
+        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
         setMat4(simple_rectangle, "projection",  glm::value_ptr(projection));
+        
+        glm::mat4 view = GetViewMatrix(camera);
+        setMat4(simple_rectangle, "view",  glm::value_ptr(view));
+        
+        //------------------------------------------------------------------------
         
         glBindVertexArray(VAO);
 
