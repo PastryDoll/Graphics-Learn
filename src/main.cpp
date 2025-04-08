@@ -1,6 +1,7 @@
 #include "texture.hpp"
 #include "shader.hpp"
 #include "camera.hpp"
+#include "light.hpp"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <math.h>
@@ -15,8 +16,8 @@ extern "C" {
 }
 #endif
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1600
+#define WINDOW_HEIGHT 900
 #define WINDOW_TITLE "Hello World"
 
 float deltaTime = 0.0f;	// time between current frame and last frame
@@ -30,6 +31,7 @@ bool firstMouse = true;
 
 // lighting
 glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
+glm::vec3 lightColor(0.8f, 0.2f, 0.1f);
 
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -112,7 +114,7 @@ int main(void)
     }
     // Openg GL Config
     glViewport(0, 0, WINDOW_WIDTH , WINDOW_HEIGHT);
-    glClearColor(0.1f, 0.1f, 0.3f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glEnable(GL_DEPTH_TEST);
 
@@ -125,7 +127,8 @@ int main(void)
     Shader simple_rectangle = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
     Shader light_shader = createShaderFromFile("shaders/vertex.glsl","shaders/light_frag.glsl");
     // Create Textures
-    Texture crate = createTextureFromFile("assets/textures/container.jpg");
+    Texture crate = createTextureFromFile("assets/textures/container2.png");
+    Texture crate_specular = createTextureFromFile("assets/textures/container2_specular.png");
     Texture face = createTextureFromFile("assets/textures/awesomeface.png");
 
     // Meshs Data
@@ -234,12 +237,49 @@ int main(void)
         glm::vec3(-1.3f,  1.0f, -1.5f)  
     };
 
-    // Shaders Uniforms
+    glm::vec3 pointLightPositions[] = {
+        glm::vec3( 0.7f,  0.2f,  2.0f),
+        glm::vec3( 2.3f, -3.3f, -4.0f),
+        glm::vec3(-4.0f,  2.0f, -12.0f),
+        glm::vec3( 0.0f,  0.0f, -3.0f)
+    };
+
+    // Static Shaders Uniforms
 
     useShader(simple_rectangle);
-        setInt(simple_rectangle, "texture1", 0);
-        setInt(simple_rectangle, "texture2", 1);
+        setInt(simple_rectangle, "material.diffuse", 0);
+        setInt(simple_rectangle, "material.specular", 2);
+        setInt(simple_rectangle, "face", 1);
+
+        setFloat(simple_rectangle, "material.shininess", 32.0f);  
+        
+        Light dirLight = {
+            .type = LIGHT_TYPE_DIRECTIONAL,
+            .direction = glm::vec3(-0.2f, -1.0f, -0.3f),
+            .ambient = glm::vec3(0.05f),
+            .diffuse = glm::vec3(0.4f),
+            .specular = glm::vec3(0.5f)
+        };
+        setLight("dirLight", dirLight, simple_rectangle);
+        
+        for (int i = 0; i < 4; i++) {
+            Light point = {
+                .type = LIGHT_TYPE_POINT,
+                .position = pointLightPositions[i],
+                .ambient = glm::vec3(0.05f),
+                .diffuse = lightColor,
+                .specular = glm::vec3(1.0f),
+                .constant = 1.0f,
+                .linear = 0.09f,
+                .quadratic = 0.032f
+            };
+            std::string name = "pointLights[" + std::to_string(i) + "]";
+            setLight(name.c_str(), point, simple_rectangle);
+        }
+    useShader(light_shader);
+        setVec3(light_shader, "lightColor", glm::value_ptr(lightColor));
     useShader({0});
+    
 
     while (!glfwWindowShouldClose(window))
     {
@@ -254,62 +294,70 @@ int main(void)
         
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        // useShader(light_shader);
-        // setVec3(light_shader, "objectColor", 1.0f, 0.5f, 0.31f);
-        // setVec3(light_shader, "lightColor",  1.0f, 1.0f, 1.0f);
-
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, crate.ID);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, face.ID);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, crate_specular.ID);
         
-        glm::mat4 transform = glm::mat4(1.0f); 
-        transform = glm::rotate(transform, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
+        glm::mat4 view = GetViewMatrix(camera);
 
         useShader(simple_rectangle);
-        
-        // Transformations View/Projection  -------------------------------------
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
-        setMat4(simple_rectangle, "projection",  glm::value_ptr(projection));
-        
-        glm::mat4 view = GetViewMatrix(camera);
-        setMat4(simple_rectangle, "view",  glm::value_ptr(view));
-        //------------------------------------------------------------------------
-        
-        
-        glm::mat4 model         = glm::mat4(1.0f); 
-        model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
-        glBindVertexArray(VAO);
-        for(unsigned int i = 0; i < 10; i++)
-        {
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, cubePositions[i]);
-            float angle = 20.0f * i;
-            model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            // Transformations View/Projection  -------------------------------------
+            setMat4(simple_rectangle, "projection",  glm::value_ptr(projection));
+            setMat4(simple_rectangle, "view",  glm::value_ptr(view));
+            //------------------------------------------------------------------------
+            
+            setVec3(simple_rectangle, "viewPos", glm::value_ptr(camera.Position));
+            Light spot = {
+                .type = LIGHT_TYPE_SPOT,
+                .position = camera.Position,
+                .direction = camera.Front,
+                .ambient = glm::vec3(0.0f),
+                .diffuse = glm::vec3(1.0f),
+                .specular = glm::vec3(1.0f),
+                .constant = 1.0f,
+                .linear = 0.09f,
+                .quadratic = 0.032f,
+                .cutOff = glm::cos(glm::radians(12.5f)),
+                .outerCutOff = glm::cos(glm::radians(15.0f))
+            };
+            setLight("spotLight", spot, simple_rectangle);
+
+            glm::mat4 model         = glm::mat4(1.0f); 
+            model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
             model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
-            setMat4(simple_rectangle, "model",  glm::value_ptr(model));
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-        }
+            glBindVertexArray(VAO);
+            for(unsigned int i = 0; i < 10; i++)
+            {
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, cubePositions[i]);
+                float angle = 20.0f * i;
+                model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+                model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+                setMat4(simple_rectangle, "model",  glm::value_ptr(model));
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+            }
 
-        setVec3(simple_rectangle, "lightPos", glm::value_ptr(lightPos));
-        setVec3(simple_rectangle, "viewPos", glm::value_ptr(camera.Position));
 
 
-        // Light Source
-        {
-            useShader(light_shader);
+        // Point Light Source
+
+        useShader(light_shader);
             setMat4(light_shader, "projection",  glm::value_ptr(projection));
             setMat4(light_shader, "view",  glm::value_ptr(view));
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, lightPos);
-            model = glm::scale(model, glm::vec3(0.2f)); 
-            setMat4(light_shader, "model",  glm::value_ptr(model));
             glBindVertexArray(lightVAO);
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+            for (unsigned int i = 0; i < 4; i++)
+            {
+                model = glm::mat4(1.0f);
+                model = glm::translate(model, pointLightPositions[i]);
+                model = glm::scale(model, glm::vec3(0.2f)); // Make it a smaller cube
+                setMat4(light_shader, "model",  glm::value_ptr(model));
+                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
 
-        }
-
+            }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
