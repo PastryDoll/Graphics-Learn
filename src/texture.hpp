@@ -8,6 +8,7 @@
 
 struct Texture {
     unsigned int ID;
+    const char* type;
 };
 
 Texture createTextureFromFile(const char * img_path)

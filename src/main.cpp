@@ -2,6 +2,7 @@
 #include "shader.hpp"
 #include "camera.hpp"
 #include "light.hpp"
+#include "mesh.hpp"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <math.h>
@@ -130,46 +131,51 @@ int main(void)
     Texture crate = createTextureFromFile("assets/textures/container2.png");
     Texture crate_specular = createTextureFromFile("assets/textures/container2_specular.png");
     Texture face = createTextureFromFile("assets/textures/awesomeface.png");
+    Texture cubeTextures[] = {
+        { crate.ID, "texture_diffuse" },
+        { face.ID, "texture_diffuse" },
+        { crate_specular.ID, "texture_specular" }
+    };
 
     // Meshs Data
-    float vertices[] = {
+    Vertex cubeVertices[] = {
         // position           // normal            // tex coords
     
         // Front face
-        -0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,   0.0f,  0.0f,  1.0f,   0.0f, 1.0f,
+        {{-0.5f, -0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {0.0f, 0.0f}},
+        {{ 0.5f, -0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {1.0f, 0.0f}},
+        {{ 0.5f,  0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {1.0f, 1.0f}},
+        {{-0.5f,  0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {0.0f, 1.0f}},
     
         // Back face
-        -0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   1.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   0.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   0.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,   0.0f,  0.0f, -1.0f,   1.0f, 1.0f,
+        {{-0.5f, -0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {1.0f, 0.0f}},
+        {{ 0.5f, -0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {0.0f, 0.0f}},
+        {{ 0.5f,  0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {0.0f, 1.0f}},
+        {{-0.5f,  0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {1.0f, 1.0f}},
     
         // Left face
-        -0.5f, -0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,   0.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,   1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  -1.0f,  0.0f,  0.0f,   1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  -1.0f,  0.0f,  0.0f,   0.0f, 1.0f,
+        {{-0.5f, -0.5f, -0.5f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
+        {{-0.5f, -0.5f,  0.5f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
+        {{-0.5f,  0.5f,  0.5f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
+        {{-0.5f,  0.5f, -0.5f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
     
         // Right face
-         0.5f, -0.5f, -0.5f,   1.0f,  0.0f,  0.0f,   1.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,   1.0f,  0.0f,  0.0f,   0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,   1.0f,  0.0f,  0.0f,   0.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,   1.0f,  0.0f,  0.0f,   1.0f, 1.0f,
+         {{0.5f, -0.5f, -0.5f},   {1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
+         {{0.5f, -0.5f,  0.5f},   {1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
+         {{0.5f,  0.5f,  0.5f},   {1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
+         {{0.5f,  0.5f, -0.5f},   {1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
     
         // Bottom face
-        -0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,   0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,   0.0f, -1.0f,  0.0f,   1.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,   1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,   0.0f, -1.0f,  0.0f,   0.0f, 0.0f,
+        {{-0.5f, -0.5f, -0.5f},   {0.0f, -1.0f,  0.0f},   {0.0f, 1.0f}},
+        {{ 0.5f, -0.5f, -0.5f},   {0.0f, -1.0f,  0.0f},   {1.0f, 1.0f}},
+        {{ 0.5f, -0.5f,  0.5f},   {0.0f, -1.0f,  0.0f},   {1.0f, 0.0f}},
+        {{-0.5f, -0.5f,  0.5f},   {0.0f, -1.0f,  0.0f},   {0.0f, 0.0f}},
     
         // Top face
-        -0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,   0.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,   0.0f,  1.0f,  0.0f,   1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,   1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,   0.0f,  1.0f,  0.0f,   0.0f, 1.0f,
+        {{-0.5f,  0.5f, -0.5f},   {0.0f,  1.0f,  0.0f},   {0.0f, 0.0f}},
+        {{ 0.5f,  0.5f, -0.5f},   {0.0f,  1.0f,  0.0f},   {1.0f, 0.0f}},
+        {{ 0.5f,  0.5f,  0.5f},   {0.0f,  1.0f,  0.0f},   {1.0f, 1.0f}},
+        {{-0.5f,  0.5f,  0.5f},   {0.0f,  1.0f,  0.0f},   {0.0f, 1.0f}},
     };
     unsigned int indices[] = {
         0, 1, 2, 2, 3, 0,        // front
@@ -180,48 +186,14 @@ int main(void)
        20,21,22,22,23,20         // top
     }; 
     
-    // Build VAOs
-    unsigned int VAO;
-    glGenVertexArrays(1, &VAO); 
-    glBindVertexArray(VAO);
-    
-    unsigned int VBO;
-    glGenBuffers(1, &VBO); 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);  
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    
-    // Vertices
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // Normals
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    // Texture Coord
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-    glEnableVertexAttribArray(2);  
-    
-    // Indices
-    unsigned int EBO;
-    glGenBuffers(1, &EBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); 
-    
-    glBindVertexArray(0);
-
-
-    unsigned int lightVAO;
-    glGenVertexArrays(1, &lightVAO);
-    glBindVertexArray(lightVAO);
-    // we only need to bind to the VBO, the container's VBO's data already contains the data.
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    // set the vertex attribute 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindVertexArray(0);
+    Mesh cubeMesh( 
+        cubeVertices,
+        sizeof(cubeVertices) / sizeof(Vertex), 
+        indices,
+        sizeof(indices) / sizeof(unsigned int),
+        cubeTextures,
+        sizeof(cubeTextures) / sizeof(Texture)
+    );
 
     // Transformations
     glm::vec3 cubePositions[] = {
@@ -294,17 +266,11 @@ int main(void)
         
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, crate.ID);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, face.ID);
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D, crate_specular.ID);
-        
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
         glm::mat4 view = GetViewMatrix(camera);
 
         useShader(simple_rectangle);
+            activateMesh(&cubeMesh, &simple_rectangle);
             // Transformations View/Projection  -------------------------------------
             setMat4(simple_rectangle, "projection",  glm::value_ptr(projection));
             setMat4(simple_rectangle, "view",  glm::value_ptr(view));
@@ -329,7 +295,6 @@ int main(void)
             glm::mat4 model         = glm::mat4(1.0f); 
             model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
             model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
-            glBindVertexArray(VAO);
             for(unsigned int i = 0; i < 10; i++)
             {
                 glm::mat4 model = glm::mat4(1.0f);
@@ -338,7 +303,7 @@ int main(void)
                 model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
                 model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
                 setMat4(simple_rectangle, "model",  glm::value_ptr(model));
-                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                drawMesh(&cubeMesh, &simple_rectangle);
             }
 
 
@@ -348,14 +313,14 @@ int main(void)
         useShader(light_shader);
             setMat4(light_shader, "projection",  glm::value_ptr(projection));
             setMat4(light_shader, "view",  glm::value_ptr(view));
-            glBindVertexArray(lightVAO);
+            activateMesh(&cubeMesh, &light_shader);
             for (unsigned int i = 0; i < 4; i++)
             {
                 model = glm::mat4(1.0f);
                 model = glm::translate(model, pointLightPositions[i]);
                 model = glm::scale(model, glm::vec3(0.2f)); // Make it a smaller cube
                 setMat4(light_shader, "model",  glm::value_ptr(model));
-                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+                drawMesh(&cubeMesh, &light_shader);
 
             }
 
@@ -363,9 +328,9 @@ int main(void)
         glfwPollEvents();
     }
     
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteVertexArrays(1, &lightVAO);
-    glDeleteBuffers(1, &VBO);
+    // glDeleteVertexArrays(1, &VAO);
+    // glDeleteVertexArrays(1, &lightVAO);
+    // glDeleteBuffers(1, &VBO);
     deleteShader(simple_rectangle);
 
     glfwTerminate();
