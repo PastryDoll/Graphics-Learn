@@ -8,10 +8,11 @@
 
 struct Texture {
     unsigned int ID;
-    const char* type;
+    char type[512];
+    char path[512];
 };
 
-Texture createTextureFromFile(const char * img_path)
+Texture createTextureFromFile(const char * img_path, const bool flip_uv)
 {
     Texture texture = {0};
     glGenTextures(1, &texture.ID);
@@ -22,8 +23,10 @@ Texture createTextureFromFile(const char * img_path)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     
     int width, height, nrChannels;
-    stbi_set_flip_vertically_on_load(true);
+    stbi_set_flip_vertically_on_load(flip_uv);
     unsigned char *data = stbi_load(img_path, &width, &height, &nrChannels, 0);
+    stbi_set_flip_vertically_on_load(!flip_uv);
+
     printf("Loading image with um of channes %u\n",nrChannels);
     if (data)
     {
@@ -56,5 +59,36 @@ Texture createTextureFromFile(const char * img_path)
     stbi_image_free(data);
 
     return texture;
+}
+
+unsigned int loadCubemap(const char *faces[6]) 
+{
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    int width, height, nrChannels;
+
+    for (unsigned int i = 0; i < 6; i++) {
+        unsigned char *data = stbi_load(faces[i], &width, &height, &nrChannels, 0);
+        if (data) {
+            glTexImage2D(
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+                0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
+            );
+            stbi_image_free(data);
+        } else {
+            printf("Cubemap texture failed to load at path: %s\n", faces[i]);
+            stbi_image_free(data);
+        }
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
 }
 #endif

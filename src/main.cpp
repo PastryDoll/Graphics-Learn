@@ -3,6 +3,7 @@
 #include "camera.hpp"
 #include "light.hpp"
 #include "mesh.hpp"
+#include "model.hpp"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <math.h>
@@ -32,7 +33,7 @@ bool firstMouse = true;
 
 // lighting
 glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
-glm::vec3 lightColor(0.8f, 0.2f, 0.1f);
+glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
 
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -127,56 +128,73 @@ int main(void)
     // Create Shaders
     Shader simple_rectangle = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
     Shader light_shader = createShaderFromFile("shaders/vertex.glsl","shaders/light_frag.glsl");
+    Shader model_shader = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
+    Shader skybox_shader = createShaderFromFile("shaders/cubemap_vertex.glsl","shaders/cubemap_frag.glsl");
     // Create Textures
-    Texture crate = createTextureFromFile("assets/textures/container2.png");
-    Texture crate_specular = createTextureFromFile("assets/textures/container2_specular.png");
-    Texture face = createTextureFromFile("assets/textures/awesomeface.png");
+    Texture crate = createTextureFromFile("assets/textures/container2.png",true);
+    Texture crate_specular = createTextureFromFile("assets/textures/container2_specular.png",true);
     Texture cubeTextures[] = {
         { crate.ID, "texture_diffuse" },
-        { face.ID, "texture_diffuse" },
         { crate_specular.ID, "texture_specular" }
     };
+
+    // Declare an array of 6 file paths for the cubemap textures
+    const char* faces[6] = {
+        "assets/skyboxes/skybox/right.jpg",
+        "assets/skyboxes/skybox/left.jpg",
+        "assets/skyboxes/skybox/top.jpg",
+        "assets/skyboxes/skybox/bottom.jpg",
+        "assets/skyboxes/skybox/front.jpg",
+        "assets/skyboxes/skybox/back.jpg"
+    };
+
+    unsigned int cubemapTexture = loadCubemap(faces);
+
+    Model* model_bag = ModelInit("assets/models/backpack/backpack.obj");
+    useShader(skybox_shader);
+        setInt(skybox_shader, "skybox", 0);
 
     // Meshs Data
     Vertex cubeVertices[] = {
         // position           // normal            // tex coords
     
         // Front face
-        {{-0.5f, -0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {0.0f, 0.0f}},
-        {{ 0.5f, -0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {1.0f, 0.0f}},
-        {{ 0.5f,  0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {1.0f, 1.0f}},
-        {{-0.5f,  0.5f,  0.5f},   {0.0f,  0.0f,  1.0f},   {0.0f, 1.0f}},
+        {{-1.0f, -1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {0.0f, 0.0f}},
+        {{ 1.0f, -1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {1.0f, 0.0f}},
+        {{ 1.0f,  1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {1.0f, 1.0f}},
+        {{-1.0f,  1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {0.0f, 1.0f}},
     
         // Back face
-        {{-0.5f, -0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {1.0f, 0.0f}},
-        {{ 0.5f, -0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {0.0f, 0.0f}},
-        {{ 0.5f,  0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {0.0f, 1.0f}},
-        {{-0.5f,  0.5f, -0.5f},   {0.0f,  0.0f, -1.0f},   {1.0f, 1.0f}},
+        {{-1.0f, -1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {1.0f, 0.0f}},
+        {{ 1.0f, -1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {0.0f, 0.0f}},
+        {{ 1.0f,  1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {0.0f, 1.0f}},
+        {{-1.0f,  1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {1.0f, 1.0f}},
     
         // Left face
-        {{-0.5f, -0.5f, -0.5f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
-        {{-0.5f, -0.5f,  0.5f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
-        {{-0.5f,  0.5f,  0.5f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
-        {{-0.5f,  0.5f, -0.5f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
+        {{-1.0f, -1.0f, -1.0f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
+        {{-1.0f, -1.0f,  1.0f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
+        {{-1.0f,  1.0f,  1.0f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
+        {{-1.0f,  1.0f, -1.0f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
     
         // Right face
-         {{0.5f, -0.5f, -0.5f},   {1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
-         {{0.5f, -0.5f,  0.5f},   {1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
-         {{0.5f,  0.5f,  0.5f},   {1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
-         {{0.5f,  0.5f, -0.5f},   {1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
+         {{1.0f, -1.0f, -1.0f},   {1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
+         {{1.0f, -1.0f,  1.0f},   {1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
+         {{1.0f,  1.0f,  1.0f},   {1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
+         {{1.0f,  1.0f, -1.0f},   {1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
     
         // Bottom face
-        {{-0.5f, -0.5f, -0.5f},   {0.0f, -1.0f,  0.0f},   {0.0f, 1.0f}},
-        {{ 0.5f, -0.5f, -0.5f},   {0.0f, -1.0f,  0.0f},   {1.0f, 1.0f}},
-        {{ 0.5f, -0.5f,  0.5f},   {0.0f, -1.0f,  0.0f},   {1.0f, 0.0f}},
-        {{-0.5f, -0.5f,  0.5f},   {0.0f, -1.0f,  0.0f},   {0.0f, 0.0f}},
+        {{-1.0f, -1.0f, -1.0f},   {0.0f, -1.0f,  0.0f},   {0.0f, 1.0f}},
+        {{ 1.0f, -1.0f, -1.0f},   {0.0f, -1.0f,  0.0f},   {1.0f, 1.0f}},
+        {{ 1.0f, -1.0f,  1.0f},   {0.0f, -1.0f,  0.0f},   {1.0f, 0.0f}},
+        {{-1.0f, -1.0f,  1.0f},   {0.0f, -1.0f,  0.0f},   {0.0f, 0.0f}},
     
         // Top face
-        {{-0.5f,  0.5f, -0.5f},   {0.0f,  1.0f,  0.0f},   {0.0f, 0.0f}},
-        {{ 0.5f,  0.5f, -0.5f},   {0.0f,  1.0f,  0.0f},   {1.0f, 0.0f}},
-        {{ 0.5f,  0.5f,  0.5f},   {0.0f,  1.0f,  0.0f},   {1.0f, 1.0f}},
-        {{-0.5f,  0.5f,  0.5f},   {0.0f,  1.0f,  0.0f},   {0.0f, 1.0f}},
+        {{-1.0f,  1.0f, -1.0f},   {0.0f,  1.0f,  0.0f},   {0.0f, 0.0f}},
+        {{ 1.0f,  1.0f, -1.0f},   {0.0f,  1.0f,  0.0f},   {1.0f, 0.0f}},
+        {{ 1.0f,  1.0f,  1.0f},   {0.0f,  1.0f,  0.0f},   {1.0f, 1.0f}},
+        {{-1.0f,  1.0f,  1.0f},   {0.0f,  1.0f,  0.0f},   {0.0f, 1.0f}},
     };
+    
     unsigned int indices[] = {
         0, 1, 2, 2, 3, 0,        // front
         4, 5, 6, 6, 7, 4,        // back
@@ -218,21 +236,34 @@ int main(void)
 
     // Static Shaders Uniforms
 
+    Light dirLight = {
+        .type = LIGHT_TYPE_DIRECTIONAL,
+        .direction = glm::vec3(-0.2f, -1.0f, -0.3f),
+        .ambient = glm::vec3(0.05f),
+        .diffuse = glm::vec3(0.4f),
+        .specular = glm::vec3(1.0f)
+    };
+    
     useShader(simple_rectangle);
-        setInt(simple_rectangle, "material.diffuse", 0);
-        setInt(simple_rectangle, "material.specular", 2);
-        setInt(simple_rectangle, "face", 1);
-
-        setFloat(simple_rectangle, "material.shininess", 32.0f);  
-        
-        Light dirLight = {
-            .type = LIGHT_TYPE_DIRECTIONAL,
-            .direction = glm::vec3(-0.2f, -1.0f, -0.3f),
+    setLight("dirLight", dirLight, simple_rectangle);
+    for (int i = 0; i < 4; i++) {
+        Light point = {
+            .type = LIGHT_TYPE_POINT,
+            .position = pointLightPositions[i],
             .ambient = glm::vec3(0.05f),
-            .diffuse = glm::vec3(0.4f),
-            .specular = glm::vec3(0.5f)
+            .diffuse = lightColor,
+            .specular = glm::vec3(1.0f),
+            .constant = 1.0f,
+            .linear = 0.09f,
+            .quadratic = 0.032f
         };
-        setLight("dirLight", dirLight, simple_rectangle);
+        std::string name = "pointLights[" + std::to_string(i) + "]";
+        setLight(name.c_str(), point, simple_rectangle);
+    }
+        
+    useShader(model_shader);
+
+        setLight("dirLight", dirLight, model_shader);
         
         for (int i = 0; i < 4; i++) {
             Light point = {
@@ -246,7 +277,7 @@ int main(void)
                 .quadratic = 0.032f
             };
             std::string name = "pointLights[" + std::to_string(i) + "]";
-            setLight(name.c_str(), point, simple_rectangle);
+            setLight(name.c_str(), point, model_shader);
         }
     useShader(light_shader);
         setVec3(light_shader, "lightColor", glm::value_ptr(lightColor));
@@ -269,6 +300,20 @@ int main(void)
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
         glm::mat4 view = GetViewMatrix(camera);
 
+        Light spot = {
+            .type = LIGHT_TYPE_SPOT,
+            .position = camera.Position,
+            .direction = camera.Front,
+            .ambient = glm::vec3(0.0f),
+            .diffuse = glm::vec3(1.0f),
+            .specular = glm::vec3(1.0f),
+            .constant = 1.0f,
+            .linear = 0.09f,
+            .quadratic = 0.032f,
+            .cutOff = glm::cos(glm::radians(12.5f)),
+            .outerCutOff = glm::cos(glm::radians(15.0f))
+        };
+
         useShader(simple_rectangle);
             activateMesh(&cubeMesh, &simple_rectangle);
             // Transformations View/Projection  -------------------------------------
@@ -277,24 +322,9 @@ int main(void)
             //------------------------------------------------------------------------
             
             setVec3(simple_rectangle, "viewPos", glm::value_ptr(camera.Position));
-            Light spot = {
-                .type = LIGHT_TYPE_SPOT,
-                .position = camera.Position,
-                .direction = camera.Front,
-                .ambient = glm::vec3(0.0f),
-                .diffuse = glm::vec3(1.0f),
-                .specular = glm::vec3(1.0f),
-                .constant = 1.0f,
-                .linear = 0.09f,
-                .quadratic = 0.032f,
-                .cutOff = glm::cos(glm::radians(12.5f)),
-                .outerCutOff = glm::cos(glm::radians(15.0f))
-            };
+
             setLight("spotLight", spot, simple_rectangle);
 
-            glm::mat4 model         = glm::mat4(1.0f); 
-            model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
             for(unsigned int i = 0; i < 10; i++)
             {
                 glm::mat4 model = glm::mat4(1.0f);
@@ -302,6 +332,15 @@ int main(void)
                 float angle = 20.0f * i;
                 model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
                 model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+                model = glm::scale(model, glm::vec3(0.5f));
+                setMat4(simple_rectangle, "model",  glm::value_ptr(model));
+                drawMesh(&cubeMesh, &simple_rectangle);
+            }
+            {
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3(0,-4,0));
+                model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(30.0f, 30.0f, 0.1f));
                 setMat4(simple_rectangle, "model",  glm::value_ptr(model));
                 drawMesh(&cubeMesh, &simple_rectangle);
             }
@@ -316,13 +355,33 @@ int main(void)
             activateMesh(&cubeMesh, &light_shader);
             for (unsigned int i = 0; i < 4; i++)
             {
-                model = glm::mat4(1.0f);
+                glm::mat4 model = glm::mat4(1.0f);
                 model = glm::translate(model, pointLightPositions[i]);
-                model = glm::scale(model, glm::vec3(0.2f)); // Make it a smaller cube
+                model = glm::scale(model, glm::vec3(0.1f)); // Make it a smaller cube
                 setMat4(light_shader, "model",  glm::value_ptr(model));
                 drawMesh(&cubeMesh, &light_shader);
 
             }
+        useShader(model_shader);
+            setMat4(model_shader, "projection",  glm::value_ptr(projection));
+            setMat4(model_shader, "view",  glm::value_ptr(view));
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
+            model = glm::scale(model, glm::vec3(1.0f));
+            setMat4(model_shader, "model",  glm::value_ptr(model));
+            setLight("spotLight", spot, model_shader);
+
+            DrawModel(model_bag,&model_shader);
+        
+        glDepthFunc(GL_LEQUAL);
+        useShader(skybox_shader);
+        view = glm::mat4(glm::mat3(view));
+        setMat4(skybox_shader, "projection",  glm::value_ptr(projection));
+        setMat4(skybox_shader, "view",  glm::value_ptr(view));
+        drawMesh(&cubeMesh, &skybox_shader);
+        glDepthFunc(GL_LESS);
+
+            
 
         glfwSwapBuffers(window);
         glfwPollEvents();

@@ -8,6 +8,8 @@ struct Vertex {
     glm::vec3 Position;
     glm::vec3 Normal;
     glm::vec2 TexCoords;
+    glm::vec3 Tangent;
+    glm::vec3 Bitangent;
 } ;
 
 static void setupMesh(struct Mesh* mesh); 
@@ -84,15 +86,16 @@ void activateMesh(Mesh* mesh, Shader* shader)
             snprintf(number, sizeof(number), "%d", diffuseNr++);
         } else if (strcmp(name, "texture_specular") == 0) {
             snprintf(number, sizeof(number), "%d", specularNr++);
-        }
+            setFloat(*shader, "material.shininess", 32.0f);
 
+        }
         snprintf(uniformName, sizeof(uniformName), "material.%s%s", name, number);
         setInt(*shader, uniformName, i);
 
         glBindTexture(GL_TEXTURE_2D, mesh->textures[i].ID);
     }
-
     glActiveTexture(GL_TEXTURE0);
+
 }
 void drawMesh(Mesh* mesh, Shader* shader) {
     glBindVertexArray(mesh->VAO);
