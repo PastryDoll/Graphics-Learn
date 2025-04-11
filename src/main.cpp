@@ -21,6 +21,7 @@ extern "C" {
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 900
 #define WINDOW_TITLE "Hello World"
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
@@ -81,6 +82,26 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     ProcessMouseScroll(camera, static_cast<float>(yoffset));
 }
 
+void setupLightsForShader(const Shader& shader, const Light& dirLight, const glm::vec3& lightColor, const glm::vec3* pointLightPositions, int pointLightCount) {
+    useShader(shader);
+    setLight("dirLight", dirLight, shader);
+
+    for (int i = 0; i < pointLightCount; i++) {
+        Light point = {
+            .type = LIGHT_TYPE_POINT,
+            .position = pointLightPositions[i],
+            .ambient = glm::vec3(0.05f),
+            .diffuse = lightColor,
+            .specular = glm::vec3(1.0f),
+            .constant = 1.0f,
+            .linear = 0.09f,
+            .quadratic = 0.032f
+        };
+        std::string name = "pointLights[" + std::to_string(i) + "]";
+        setLight(name.c_str(), point, shader);
+    }
+}
+
 int main(void)
 {
     GLFWwindow* window;
@@ -119,6 +140,8 @@ int main(void)
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
     const GLubyte* renderer = glGetString(GL_RENDERER);
     const GLubyte* vendor = glGetString(GL_VENDOR);
@@ -130,9 +153,12 @@ int main(void)
     Shader light_shader = createShaderFromFile("shaders/vertex.glsl","shaders/light_frag.glsl");
     Shader model_shader = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
     Shader skybox_shader = createShaderFromFile("shaders/cubemap_vertex.glsl","shaders/cubemap_frag.glsl");
+    Shader window_shader = createShaderFromFile("shaders/vertex.glsl","shaders/window.glsl");
     // Create Textures
     Texture crate = createTextureFromFile("assets/textures/container2.png",true);
     Texture crate_specular = createTextureFromFile("assets/textures/container2_specular.png",true);
+    Texture grass[] = {createTextureFromFile("assets/textures/grass.png",true).ID,"texture_diffuse"};
+    Texture window_red[] = {createTextureFromFile("assets/textures/blending_transparent_window.png",true).ID,"texture_diffuse"};
     Texture cubeTextures[] = {
         { crate.ID, "texture_diffuse" },
         { crate_specular.ID, "texture_specular" }
@@ -203,14 +229,46 @@ int main(void)
        16,17,18,18,19,16,        // bottom
        20,21,22,22,23,20         // top
     }; 
+
+    Vertex quadVertices[] = {
+        // Position               // Normal              // Tex Coords
+    
+        {{-1.0f, -1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {0.0f, 0.0f}},  // Bottom-left
+        {{ 1.0f, -1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {1.0f, 0.0f}},  // Bottom-right
+        {{ 1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {1.0f, 1.0f}},  // Top-right
+        {{-1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {0.0f, 1.0f}},  // Top-left
+    };
+    
+    unsigned int quadIndices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
     
     Mesh cubeMesh( 
         cubeVertices,
-        sizeof(cubeVertices) / sizeof(Vertex), 
+        ARRAY_SIZE(cubeVertices),
         indices,
-        sizeof(indices) / sizeof(unsigned int),
+        ARRAY_SIZE(indices),
         cubeTextures,
-        sizeof(cubeTextures) / sizeof(Texture)
+        ARRAY_SIZE(cubeTextures)
+    );
+
+    Mesh quadGrass(
+        quadVertices,
+        ARRAY_SIZE(quadVertices),
+        quadIndices,
+        ARRAY_SIZE(quadIndices),
+        grass,
+        ARRAY_SIZE(grass)
+    );
+
+    Mesh quadWindow(
+        quadVertices,
+        ARRAY_SIZE(quadVertices),
+        quadIndices,
+        ARRAY_SIZE(quadIndices),
+        window_red,
+        ARRAY_SIZE(window_red)
     );
 
     // Transformations
@@ -235,7 +293,6 @@ int main(void)
     };
 
     // Static Shaders Uniforms
-
     Light dirLight = {
         .type = LIGHT_TYPE_DIRECTIONAL,
         .direction = glm::vec3(-0.2f, -1.0f, -0.3f),
@@ -244,43 +301,8 @@ int main(void)
         .specular = glm::vec3(1.0f)
     };
     
-    useShader(simple_rectangle);
-    setLight("dirLight", dirLight, simple_rectangle);
-    for (int i = 0; i < 4; i++) {
-        Light point = {
-            .type = LIGHT_TYPE_POINT,
-            .position = pointLightPositions[i],
-            .ambient = glm::vec3(0.05f),
-            .diffuse = lightColor,
-            .specular = glm::vec3(1.0f),
-            .constant = 1.0f,
-            .linear = 0.09f,
-            .quadratic = 0.032f
-        };
-        std::string name = "pointLights[" + std::to_string(i) + "]";
-        setLight(name.c_str(), point, simple_rectangle);
-    }
-        
-    useShader(model_shader);
-
-        setLight("dirLight", dirLight, model_shader);
-        
-        for (int i = 0; i < 4; i++) {
-            Light point = {
-                .type = LIGHT_TYPE_POINT,
-                .position = pointLightPositions[i],
-                .ambient = glm::vec3(0.05f),
-                .diffuse = lightColor,
-                .specular = glm::vec3(1.0f),
-                .constant = 1.0f,
-                .linear = 0.09f,
-                .quadratic = 0.032f
-            };
-            std::string name = "pointLights[" + std::to_string(i) + "]";
-            setLight(name.c_str(), point, model_shader);
-        }
     useShader(light_shader);
-        setVec3(light_shader, "lightColor", glm::value_ptr(lightColor));
+    setVec3(light_shader, "lightColor", glm::value_ptr(lightColor));
     useShader({0});
     
 
@@ -305,14 +327,21 @@ int main(void)
             .position = camera.Position,
             .direction = camera.Front,
             .ambient = glm::vec3(0.0f),
-            .diffuse = glm::vec3(1.0f),
-            .specular = glm::vec3(1.0f),
+            .diffuse = glm::vec3(0.0f),
+            .specular = glm::vec3(0.0f),
             .constant = 1.0f,
             .linear = 0.09f,
             .quadratic = 0.032f,
             .cutOff = glm::cos(glm::radians(12.5f)),
             .outerCutOff = glm::cos(glm::radians(15.0f))
         };
+
+        const glm::vec3 OrinalVec = glm::vec3( 0.7f,  0.2f,  2.0f);
+        const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(), glm::vec3(0.0f,1.0f,0.0f));
+        pointLightPositions[0] = rot * glm::vec4(OrinalVec, 1.0f);
+        setupLightsForShader(simple_rectangle, dirLight, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
+        setupLightsForShader(model_shader, dirLight, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
+
 
         useShader(simple_rectangle);
             activateMesh(&cubeMesh, &simple_rectangle);
@@ -345,6 +374,14 @@ int main(void)
                 drawMesh(&cubeMesh, &simple_rectangle);
             }
 
+            {
+                activateMesh(&quadGrass, &simple_rectangle);
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3(0,-3.90 + 1.0,0));
+                setMat4(simple_rectangle, "model",  glm::value_ptr(model));
+                drawMesh(&quadGrass, &simple_rectangle);
+            }
+        
 
 
         // Point Light Source
@@ -362,24 +399,43 @@ int main(void)
                 drawMesh(&cubeMesh, &light_shader);
 
             }
-        useShader(model_shader);
-            setMat4(model_shader, "projection",  glm::value_ptr(projection));
-            setMat4(model_shader, "view",  glm::value_ptr(view));
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
-            model = glm::scale(model, glm::vec3(1.0f));
-            setMat4(model_shader, "model",  glm::value_ptr(model));
-            setLight("spotLight", spot, model_shader);
 
-            DrawModel(model_bag,&model_shader);
+        {
+            useShader(model_shader);
+                setMat4(model_shader, "projection",  glm::value_ptr(projection));
+                setMat4(model_shader, "view",  glm::value_ptr(view));
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
+                model = glm::scale(model, glm::vec3(1.0f));
+                setMat4(model_shader, "model",  glm::value_ptr(model));
+                setLight("spotLight", spot, model_shader);
+    
+                DrawModel(model_bag,&model_shader);
+        }
         
-        glDepthFunc(GL_LEQUAL);
-        useShader(skybox_shader);
-        view = glm::mat4(glm::mat3(view));
-        setMat4(skybox_shader, "projection",  glm::value_ptr(projection));
-        setMat4(skybox_shader, "view",  glm::value_ptr(view));
-        drawMesh(&cubeMesh, &skybox_shader);
-        glDepthFunc(GL_LESS);
+        {
+            glDepthFunc(GL_LEQUAL);
+            useShader(skybox_shader);
+            const glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
+            setMat4(skybox_shader, "projection",  glm::value_ptr(projection));
+            setMat4(skybox_shader, "view",  glm::value_ptr(skybox_view));
+            drawMesh(&cubeMesh, &skybox_shader);
+            glDepthFunc(GL_LESS);
+        }
+        
+        {
+            useShader(window_shader);
+            glDepthMask(GL_FALSE);
+                setMat4(window_shader, "projection",  glm::value_ptr(projection));
+                setMat4(window_shader, "view",  glm::value_ptr(view));
+                activateMesh(&quadWindow, &window_shader);
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3(-1.0,2.5,-4.0));
+                model = glm::rotate(model, glm::radians(75.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                setMat4(window_shader, "model",  glm::value_ptr(model));
+                drawMesh(&quadWindow, &window_shader);
+            glDepthMask(GL_TRUE);
+        }
 
             
 
