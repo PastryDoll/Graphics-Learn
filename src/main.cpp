@@ -100,7 +100,7 @@ void setupLightsForShader(const Shader& shader, const Light& dirLight, const Lig
         Light point = {
             .type = LIGHT_TYPE_POINT,
             .position = pointLightPositions[i],
-            .ambient = glm::vec3(0.0f),
+            .ambient = glm::vec3(1.0f),
             .diffuse = lightColor,
             .specular = glm::vec3(1.0f),
             .constant = 0.0f,
@@ -139,6 +139,7 @@ int main(void)
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);  
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
@@ -148,7 +149,6 @@ int main(void)
     }
     // Openg GL Config
     glViewport(0, 0, WINDOW_WIDTH , WINDOW_HEIGHT);
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
@@ -159,11 +159,40 @@ int main(void)
     printf("Renderer: %s\n", renderer);
     printf("Vendor: %s\n", vendor);
 
+            // framebuffer configuration
+    // -------------------------
+    unsigned int framebuffer;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    // create a color attachment texture
+    Texture screen_texture;
+    screen_texture.type = TEXTURE_DIFFUSE;
+    glGenTextures(1, &screen_texture.ID);
+    glBindTexture(GL_TEXTURE_2D, screen_texture.ID);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, screen_texture.ID, 0);
+    // create a renderbuffer object for depth and stencil attachment (we won't be sampling these)
+    unsigned int rbo;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, WINDOW_WIDTH, WINDOW_HEIGHT); // use a single renderbuffer object for both a depth AND stencil buffer.
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo); // now actually attach it
+    // now that we actually created the framebuffer and added all attachments we want to check if it is actually complete now
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        printf("ERROR::FRAMEBUFFER:: Framebuffer is not complete!");
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+    
+
     // Create Shaders
     Shader model_shader = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
     Shader light_shader = createShaderFromFile("shaders/vertex.glsl","shaders/light_frag.glsl");
     Shader skybox_shader = createShaderFromFile("shaders/cubemap_vertex.glsl","shaders/cubemap_frag.glsl");
     Shader window_shader = createShaderFromFile("shaders/vertex.glsl","shaders/window.glsl");
+    Shader screen_shader = createShaderFromFile("shaders/screen_vertex.glsl","shaders/screen_frag.glsl");
     // Create Textures
     Texture crate = createTextureFromFile("container2.png", "assets/textures",TEXTURE_DIFFUSE,true);
     Texture crate_specular = createTextureFromFile("container2_specular.png", "assets/textures", TEXTURE_SPECULAR, true);
@@ -249,6 +278,31 @@ int main(void)
         {{ 1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {1.0f, 1.0f}},  // Top-right
         {{-1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {0.0f, 1.0f}},  // Top-left
     };
+
+    float quadVerticess[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.
+        // positions   // texCoords
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+
+        -1.0f,  1.0f,  0.0f, 1.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f
+    };
+
+    unsigned int quadVAO, quadVBO;
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerticess), &quadVerticess, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+    useShader(screen_shader);
+    setInt(screen_shader, "texture1", 0);
     
     unsigned int quadIndices[] = {
         0, 1, 2,
@@ -289,6 +343,14 @@ int main(void)
         wood_floor,
         ARRAY_SIZE(wood_floor)
     );
+    Mesh quadScreen(
+        quadVertices,
+        ARRAY_SIZE(quadVertices),
+        quadIndices,
+        ARRAY_SIZE(quadIndices),
+        &screen_texture,
+        1
+    );
 
     // Transformations
     glm::vec3 cubePositions[] = {
@@ -323,12 +385,12 @@ int main(void)
     useShader(light_shader);
     setVec3(light_shader, "lightColor", glm::value_ptr(lightColor));
     useShader({0});
-    
+
+
 
     while (!glfwWindowShouldClose(window))
     {
-        if (sRGB){glEnable(GL_FRAMEBUFFER_SRGB);}
-        else{glDisable(GL_FRAMEBUFFER_SRGB);}
+        
         int screen_width, screen_height;
         glfwGetFramebufferSize(window, &screen_width, &screen_height); // TODO: maybe we can do this only when changes happen on the callback
 
@@ -338,6 +400,10 @@ int main(void)
 
         processInput(window);
         
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glEnable(GL_FRAMEBUFFER_SRGB);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glEnable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
@@ -460,7 +526,24 @@ int main(void)
             glDepthMask(GL_TRUE);
         }
 
-            
+
+        // // now bind back to default framebuffer and draw a quad plane with the attached framebuffer color texture
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        if (sRGB){glEnable(GL_FRAMEBUFFER_SRGB);}
+        else{glDisable(GL_FRAMEBUFFER_SRGB);}
+        glDisable(GL_DEPTH_TEST); // disable depth test so screen-space quad isn't discarded due to depth test.
+        // // clear all relevant buffers
+        glClearColor(1.0f, 1.0f, 1.0f, 1.0f); // set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        useShader(screen_shader);
+        glBindVertexArray(quadVAO);
+        glBindTexture(GL_TEXTURE_2D, screen_texture.ID);	// use the color attachment texture as the texture of the quad plane
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // useShader(screen_shader);
+        // activateMesh(&quadScreen, &screen_shader);
+        // drawMesh(&quadScreen, &screen_shader);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
