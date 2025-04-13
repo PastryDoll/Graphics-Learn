@@ -6,6 +6,7 @@
 #include <assimp/postprocess.h>
 #include "mesh.hpp"
 #include "shader.hpp"
+#include "texture.hpp"
 
 #define MAX_TEXTURES 64
 
@@ -42,51 +43,7 @@ void DrawModel(Model* model, Shader* shader)
 
 }  
 
-unsigned int TextureFromFile(const char *path, const char *directory)
-{
-    char filename[512];
-    snprintf(filename, sizeof(filename), "%s/%s", directory, path);
-
-    unsigned int textureID;
-    glGenTextures(1, &textureID);
-
-    int width, height, nrComponents;
-    stbi_set_flip_vertically_on_load(true);
-
-    unsigned char *data = stbi_load(filename, &width, &height, &nrComponents, 0);
-    stbi_set_flip_vertically_on_load(false);
-
-    if (data)
-    {
-        GLenum format;
-        if (nrComponents == 1)
-            format = GL_RED;
-        else if (nrComponents == 3)
-            format = GL_RGB;
-        else if (nrComponents == 4)
-            format = GL_RGBA;
-
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        stbi_image_free(data);
-    }
-    else
-    {
-        printf("Texture failed to load at path: %s\n",path);
-        stbi_image_free(data);
-    }
-
-    return textureID;
-}
-
-int loadMaterialTextures(aiMaterial *mat, aiTextureType type, const char *typeName, Texture *out_textures,  Model *model)
+int loadMaterialTextures(aiMaterial *mat, aiTextureType type, int texture_type, Texture *out_textures,  Model *model)
 {
     int count = 0;
     for(unsigned int i = 0; i < mat->GetTextureCount(type); i++)
@@ -106,9 +63,7 @@ int loadMaterialTextures(aiMaterial *mat, aiTextureType type, const char *typeNa
         }
         if(!skip)
         {   // if texture hasn't been loaded already, load it
-            Texture texture;
-            texture.ID =  TextureFromFile(str.C_Str(), model->directory);
-            strncpy_s(texture.type, sizeof(texture.type), typeName, _TRUNCATE);
+            Texture texture =  createTextureFromFile(str.C_Str(), model->directory,texture_type, true);
             strncpy_s(texture.path, sizeof(texture.path), str.C_Str(), _TRUNCATE);
 
             out_textures[count++] = texture;
@@ -190,10 +145,10 @@ Mesh processMesh(aiMesh *mesh, const aiScene *scene, Model* model)
         // normal: texture_normalN
         Texture* textures = (Texture *)malloc(MAX_TEXTURES * sizeof(Texture));
         int textureCount = 0;
-        textureCount += loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", textures + textureCount,model);
-        textureCount += loadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular", textures + textureCount,model);
-        textureCount += loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal", textures + textureCount,model);
-        textureCount += loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height", textures + textureCount,model);
+        textureCount += loadMaterialTextures(material, aiTextureType_DIFFUSE, TEXTURE_DIFFUSE, textures + textureCount,model);
+        textureCount += loadMaterialTextures(material, aiTextureType_SPECULAR, TEXTURE_SPECULAR, textures + textureCount,model);
+        textureCount += loadMaterialTextures(material, aiTextureType_HEIGHT, TEXTURE_NORMAL, textures + textureCount,model);
+        textureCount += loadMaterialTextures(material, aiTextureType_AMBIENT, TEXTURE_HEIGHT, textures + textureCount,model);
 
         // return a mesh object created from the extracted mesh data
         return Mesh(vertices, numVertices, indices, numIndices, textures, textureCount);

@@ -31,10 +31,11 @@ Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 float lastX = (float)WINDOW_WIDTH/2.0f;
 float lastY = (float)WINDOW_HEIGHT/2.0f;
 bool firstMouse = true;
+bool sRGB = false;
 
 // lighting
 glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
-glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
+glm::vec3 lightColor(0.4f, 0.4f, 0.4f);
 
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -43,6 +44,8 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 
 void processInput(GLFWwindow *window)
 {
+    static bool lKeyPressedLastFrame = false;
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -54,6 +57,14 @@ void processInput(GLFWwindow *window)
         ProcessKeyboard(camera,LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         ProcessKeyboard(camera,RIGHT, deltaTime);
+    
+    bool lKeyCurrentlyPressed = glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS;
+    if (lKeyCurrentlyPressed && !lKeyPressedLastFrame)
+    {
+        sRGB = !sRGB;
+    }
+    lKeyPressedLastFrame = lKeyCurrentlyPressed;
+    
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
@@ -155,13 +166,13 @@ int main(void)
     Shader skybox_shader = createShaderFromFile("shaders/cubemap_vertex.glsl","shaders/cubemap_frag.glsl");
     Shader window_shader = createShaderFromFile("shaders/vertex.glsl","shaders/window.glsl");
     // Create Textures
-    Texture crate = createTextureFromFile("assets/textures/container2.png",true);
-    Texture crate_specular = createTextureFromFile("assets/textures/container2_specular.png",true);
-    Texture grass[] = {createTextureFromFile("assets/textures/grass.png",true).ID,"texture_diffuse"};
-    Texture window_red[] = {createTextureFromFile("assets/textures/blending_transparent_window.png",true).ID,"texture_diffuse"};
+    Texture crate = createTextureFromFile("container2.png", "assets/textures",TEXTURE_DIFFUSE,true);
+    Texture crate_specular = createTextureFromFile("container2_specular.png", "assets/textures", TEXTURE_SPECULAR, true);
+    Texture grass[] = {createTextureFromFile("grass.png", "assets/textures",TEXTURE_DIFFUSE, true)};
+    Texture window_red[] = {createTextureFromFile("blending_transparent_window.png", "assets/textures",TEXTURE_DIFFUSE, true)};
     Texture cubeTextures[] = {
-        { crate.ID, "texture_diffuse" },
-        { crate_specular.ID, "texture_specular" }
+        { crate},
+        { crate_specular}
     };
 
     // Declare an array of 6 file paths for the cubemap textures
@@ -297,7 +308,7 @@ int main(void)
         .type = LIGHT_TYPE_DIRECTIONAL,
         .direction = glm::vec3(-0.2f, -1.0f, -0.3f),
         .ambient = glm::vec3(0.05f),
-        .diffuse = glm::vec3(0.4f),
+        .diffuse = glm::vec3(0.2f),
         .specular = glm::vec3(1.0f)
     };
     
@@ -308,6 +319,8 @@ int main(void)
 
     while (!glfwWindowShouldClose(window))
     {
+        if (sRGB){glEnable(GL_FRAMEBUFFER_SRGB);}
+        else{glDisable(GL_FRAMEBUFFER_SRGB);}
         int screen_width, screen_height;
         glfwGetFramebufferSize(window, &screen_width, &screen_height); // TODO: maybe we can do this only when changes happen on the callback
 

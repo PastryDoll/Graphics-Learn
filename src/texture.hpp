@@ -6,25 +6,35 @@
 
 #include <glad/glad.h>
 
+enum Texture_Types {
+    TEXTURE_DIFFUSE,
+    TEXTURE_SPECULAR,
+    TEXTURE_NORMAL,
+    TEXTURE_HEIGHT,
+    TEXTURE_TYPES_MAX
+};
+
+const char * g_texture_types_str[TEXTURE_TYPES_MAX] = {"texture_diffuse", "texture_specular", "texture_normal", "texture_height"};
+
 struct Texture {
     unsigned int ID;
-    char type[512];
+    int type;
     char path[512];
 };
 
-Texture createTextureFromFile(const char * img_path, const bool flip_uv)
+Texture createTextureFromFile(const char * path, const char *directory, int texture_type, const bool flip_uv)
 {
+
+    char filename[512];
+    snprintf(filename, sizeof(filename), "%s/%s", directory, path);
+
     Texture texture = {0};
     glGenTextures(1, &texture.ID);
-    glBindTexture(GL_TEXTURE_2D, texture.ID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    texture.type = texture_type;
     
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(flip_uv);
-    unsigned char *data = stbi_load(img_path, &width, &height, &nrChannels, 0);
+    unsigned char *data = stbi_load(filename, &width, &height, &nrChannels, 0);
     stbi_set_flip_vertically_on_load(!flip_uv);
 
     printf("Loading image with um of channes %u\n",nrChannels);
@@ -32,14 +42,22 @@ Texture createTextureFromFile(const char * img_path, const bool flip_uv)
     {
         GLenum internalFormat;
         GLenum dataFormat;
-        if (nrChannels == 3)
+        if (nrChannels == 1)
         {
-            internalFormat = GL_RGB8;
+            internalFormat = GL_RED;
+            dataFormat = GL_RED;
+
+        }
+        else if (nrChannels == 3)
+        {
+            if (texture_type == TEXTURE_DIFFUSE) {internalFormat = GL_SRGB8;}
+            else {internalFormat = GL_RGB8;}
             dataFormat = GL_RGB;
         }
         else if (nrChannels == 4)
         {
-            internalFormat = GL_RGBA8;
+            if (texture_type == TEXTURE_DIFFUSE) {internalFormat = GL_SRGB8_ALPHA8;}
+            else {internalFormat = GL_RGBA8;}
             dataFormat = GL_RGBA;
         }
         else
@@ -48,6 +66,12 @@ Texture createTextureFromFile(const char * img_path, const bool flip_uv)
             stbi_image_free(data);
             return texture; 
         }
+        glBindTexture(GL_TEXTURE_2D, texture.ID);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // Row alignment
         glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, dataFormat, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
@@ -74,7 +98,7 @@ unsigned int loadCubemap(const char *faces[6])
         if (data) {
             glTexImage2D(
                 GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
-                0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
+                0, GL_SRGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
             );
             stbi_image_free(data);
         } else {

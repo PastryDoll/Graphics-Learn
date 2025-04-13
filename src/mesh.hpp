@@ -79,7 +79,7 @@ void activateMesh(Mesh* mesh, Shader* shader)
     for (unsigned int i = 0; i < mesh->numTextures; i++) {
         glActiveTexture(GL_TEXTURE0 + i);
 
-        const char* name = mesh->textures[i].type;
+        const char* name = g_texture_types_str[mesh->textures[i].type];
         char number[10];
 
         if (strcmp(name, "texture_diffuse") == 0) {
