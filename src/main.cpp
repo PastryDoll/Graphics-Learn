@@ -154,6 +154,58 @@ int main(void)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
+    GLuint defaultFramebuffer = 0;  // Default framebuffer ID is always 0
+    GLint attachmentType;
+
+    // Bind the default framebuffer explicitly (default framebuffer is always bound, but let's be explicit)
+    glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
+
+    // Check if binding succeeded
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        fprintf(stderr, "Framebuffer is not complete.\n");
+        return -1;
+    }
+    
+    // Query using OpenGL
+    {
+        GLint glRedBits, glGreenBits, glBlueBits, glAlphaBits;
+        GLint glDepthBits, glStencilBits, glSamples;
+        // For color buffer (default framebuffer)
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, 
+                                                GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, &glRedBits);
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, 
+                                                GL_FRAMEBUFFER_ATTACHMENT_GREEN_SIZE, &glGreenBits);
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, 
+                                                GL_FRAMEBUFFER_ATTACHMENT_BLUE_SIZE, &glBlueBits);
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT, 
+                                                GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE, &glAlphaBits);
+        
+        // For depth and stencil
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_DEPTH, 
+                                                GL_FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE, &glDepthBits);
+        glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_STENCIL, 
+                                                GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE, &glStencilBits);
+        // For multisampling
+        glGetIntegerv(GL_SAMPLES, &glSamples);
+        // Handle any OpenGL errors from the query
+        GLenum error = glGetError();
+        if (error == GL_NO_ERROR) {
+            printf("\nDefault Framebuffer Format (OpenGL):\n");
+            printf("---------------------------\n");
+            printf("Red bits:     %d\n", glRedBits);
+            printf("Green bits:   %d\n", glGreenBits);
+            printf("Blue bits:    %d\n", glBlueBits);
+            printf("Alpha bits:   %d\n", glAlphaBits);
+            printf("Depth bits:   %d\n", glDepthBits);
+            printf("Stencil bits: %d\n", glStencilBits);
+            printf("MSAA samples: %d\n", glSamples);
+        } else {
+            printf("\nUnable to query some OpenGL framebuffer parameters. Error code: 0x%x\n", error);
+        }
+    }
+    
+  
+
     const GLubyte* renderer = glGetString(GL_RENDERER);
     const GLubyte* vendor = glGetString(GL_VENDOR);
     printf("Renderer: %s\n", renderer);
@@ -169,7 +221,7 @@ int main(void)
     screen_texture.type = TEXTURE_DIFFUSE;
     glGenTextures(1, &screen_texture.ID);
     glBindTexture(GL_TEXTURE_2D, screen_texture.ID);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, screen_texture.ID, 0);
@@ -401,7 +453,6 @@ int main(void)
         processInput(window);
         
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glEnable(GL_FRAMEBUFFER_SRGB);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glEnable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -540,6 +591,7 @@ int main(void)
         glBindVertexArray(quadVAO);
         glBindTexture(GL_TEXTURE_2D, screen_texture.ID);	// use the color attachment texture as the texture of the quad plane
         glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDisable(GL_FRAMEBUFFER_SRGB);
 
         // useShader(screen_shader);
         // activateMesh(&quadScreen, &screen_shader);
