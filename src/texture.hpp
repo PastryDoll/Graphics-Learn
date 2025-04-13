@@ -3,6 +3,9 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../thirdparty/stb/stb_image.h"
+#include "../thirdparty/glm/glm.hpp"
+#include "../thirdparty/glm/gtc/type_ptr.hpp"
+
 
 #include <glad/glad.h>
 
@@ -115,4 +118,20 @@ unsigned int loadCubemap(const char *faces[6])
 
     return textureID;
 }
+
+Texture createSingleColorTexture(int type, glm::u8vec3 color) {
+
+    Texture texture = {0};
+    glGenTextures(1, &texture.ID);
+    texture.type = type;
+    glBindTexture(GL_TEXTURE_2D, texture.ID);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, glm::value_ptr(color));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    return texture;
+}
+
 #endif

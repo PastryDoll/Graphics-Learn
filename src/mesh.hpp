@@ -90,7 +90,6 @@ void activateMesh(Mesh* mesh, Shader* shader)
 
         }
         snprintf(uniformName, sizeof(uniformName), "material.%s%s", name, number);
-        printf("Uniform: %s\n", uniformName);
         setInt(*shader, uniformName, i);
 
         glBindTexture(GL_TEXTURE_2D, mesh->textures[i].ID);

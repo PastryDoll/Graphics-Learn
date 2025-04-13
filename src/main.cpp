@@ -31,11 +31,10 @@ Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 float lastX = (float)WINDOW_WIDTH/2.0f;
 float lastY = (float)WINDOW_HEIGHT/2.0f;
 bool firstMouse = true;
-bool sRGB = false;
+bool sRGB = true;
 
 // lighting
-glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
-glm::vec3 lightColor(0.4f, 0.4f, 0.4f);
+glm::vec3 lightColor(0.6f, 0.6f, 0.6f);
 
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -93,24 +92,25 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     ProcessMouseScroll(camera, static_cast<float>(yoffset));
 }
 
-void setupLightsForShader(const Shader& shader, const Light& dirLight, const glm::vec3& lightColor, const glm::vec3* pointLightPositions, int pointLightCount) {
+void setupLightsForShader(const Shader& shader, const Light& dirLight, const Light spotLight, const glm::vec3& lightColor, const glm::vec3* pointLightPositions, int pointLightCount) {
     useShader(shader);
     setLight("dirLight", dirLight, shader);
-
+    setLight("spotLight", spotLight, shader);
     for (int i = 0; i < pointLightCount; i++) {
         Light point = {
             .type = LIGHT_TYPE_POINT,
             .position = pointLightPositions[i],
-            .ambient = glm::vec3(0.05f),
+            .ambient = glm::vec3(0.0f),
             .diffuse = lightColor,
             .specular = glm::vec3(1.0f),
-            .constant = 1.0f,
-            .linear = 0.09f,
-            .quadratic = 0.032f
+            .constant = 0.0f,
+            .linear = 0.0f,
+            .quadratic = 1.0f
         };
         std::string name = "pointLights[" + std::to_string(i) + "]";
         setLight(name.c_str(), point, shader);
     }
+    useShader({0});
 }
 
 int main(void)
@@ -160,15 +160,15 @@ int main(void)
     printf("Vendor: %s\n", vendor);
 
     // Create Shaders
-    Shader simple_rectangle = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
-    Shader light_shader = createShaderFromFile("shaders/vertex.glsl","shaders/light_frag.glsl");
     Shader model_shader = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
+    Shader light_shader = createShaderFromFile("shaders/vertex.glsl","shaders/light_frag.glsl");
     Shader skybox_shader = createShaderFromFile("shaders/cubemap_vertex.glsl","shaders/cubemap_frag.glsl");
     Shader window_shader = createShaderFromFile("shaders/vertex.glsl","shaders/window.glsl");
     // Create Textures
     Texture crate = createTextureFromFile("container2.png", "assets/textures",TEXTURE_DIFFUSE,true);
     Texture crate_specular = createTextureFromFile("container2_specular.png", "assets/textures", TEXTURE_SPECULAR, true);
     Texture grass[] = {createTextureFromFile("grass.png", "assets/textures",TEXTURE_DIFFUSE, true)};
+    Texture wood_floor[] = {createTextureFromFile("wood.png", "assets/textures",TEXTURE_DIFFUSE, true), createSingleColorTexture(TEXTURE_SPECULAR, {150,150,150})};
     Texture window_red[] = {createTextureFromFile("blending_transparent_window.png", "assets/textures",TEXTURE_DIFFUSE, true)};
     Texture cubeTextures[] = {
         { crate},
@@ -281,6 +281,14 @@ int main(void)
         window_red,
         ARRAY_SIZE(window_red)
     );
+    Mesh quadFloor(
+        quadVertices,
+        ARRAY_SIZE(quadVertices),
+        quadIndices,
+        ARRAY_SIZE(quadIndices),
+        wood_floor,
+        ARRAY_SIZE(wood_floor)
+    );
 
     // Transformations
     glm::vec3 cubePositions[] = {
@@ -300,16 +308,16 @@ int main(void)
         glm::vec3( 0.7f,  0.2f,  2.0f),
         glm::vec3( 2.3f, -3.3f, -4.0f),
         glm::vec3(-4.0f,  2.0f, -12.0f),
-        glm::vec3( 0.0f,  0.0f, -3.0f)
+        glm::vec3( 0.0f,  0.0f, -3.0f),
     };
 
     // Static Shaders Uniforms
     Light dirLight = {
         .type = LIGHT_TYPE_DIRECTIONAL,
         .direction = glm::vec3(-0.2f, -1.0f, -0.3f),
-        .ambient = glm::vec3(0.05f),
-        .diffuse = glm::vec3(0.2f),
-        .specular = glm::vec3(1.0f)
+        .ambient = glm::vec3(0.01f),
+        .diffuse = glm::vec3(0.05f),
+        .specular = glm::vec3(0.0f)
     };
     
     useShader(light_shader);
@@ -342,9 +350,9 @@ int main(void)
             .ambient = glm::vec3(0.0f),
             .diffuse = glm::vec3(0.0f),
             .specular = glm::vec3(0.0f),
-            .constant = 1.0f,
-            .linear = 0.09f,
-            .quadratic = 0.032f,
+            .constant = 0.0f,
+            .linear = 0.0f,
+            .quadratic = 1.0f,
             .cutOff = glm::cos(glm::radians(12.5f)),
             .outerCutOff = glm::cos(glm::radians(15.0f))
         };
@@ -352,20 +360,19 @@ int main(void)
         const glm::vec3 OrinalVec = glm::vec3( 0.7f,  0.2f,  2.0f);
         const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(), glm::vec3(0.0f,1.0f,0.0f));
         pointLightPositions[0] = rot * glm::vec4(OrinalVec, 1.0f);
-        setupLightsForShader(simple_rectangle, dirLight, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
-        setupLightsForShader(model_shader, dirLight, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
+        setupLightsForShader(model_shader, dirLight, spot, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
 
+        useShader(model_shader);
+        {
 
-        useShader(simple_rectangle);
-            activateMesh(&cubeMesh, &simple_rectangle);
+            activateMesh(&cubeMesh, &model_shader);
             // Transformations View/Projection  -------------------------------------
-            setMat4(simple_rectangle, "projection",  glm::value_ptr(projection));
-            setMat4(simple_rectangle, "view",  glm::value_ptr(view));
+            setMat4(model_shader, "projection",  glm::value_ptr(projection));
+            setMat4(model_shader, "view",  glm::value_ptr(view));
             //------------------------------------------------------------------------
             
-            setVec3(simple_rectangle, "viewPos", glm::value_ptr(camera.Position));
+            setVec3(model_shader, "viewPos", glm::value_ptr(camera.Position));
 
-            setLight("spotLight", spot, simple_rectangle);
 
             for(unsigned int i = 0; i < 10; i++)
             {
@@ -375,26 +382,29 @@ int main(void)
                 model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
                 model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
                 model = glm::scale(model, glm::vec3(0.5f));
-                setMat4(simple_rectangle, "model",  glm::value_ptr(model));
-                drawMesh(&cubeMesh, &simple_rectangle);
+                setMat4(model_shader, "model",  glm::value_ptr(model));
+                drawMesh(&cubeMesh, &model_shader);
             }
+            
             {
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, glm::vec3(0,-4,0));
-                model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                model = glm::scale(model, glm::vec3(30.0f, 30.0f, 0.1f));
-                setMat4(simple_rectangle, "model",  glm::value_ptr(model));
-                drawMesh(&cubeMesh, &simple_rectangle);
-            }
-
-            {
-                activateMesh(&quadGrass, &simple_rectangle);
+                activateMesh(&quadGrass, &model_shader);
                 glm::mat4 model = glm::mat4(1.0f);
                 model = glm::translate(model, glm::vec3(0,-3.90 + 1.0,0));
-                setMat4(simple_rectangle, "model",  glm::value_ptr(model));
-                drawMesh(&quadGrass, &simple_rectangle);
+                setMat4(model_shader, "model",  glm::value_ptr(model));
+                drawMesh(&quadGrass, &model_shader);
             }
-        
+            {
+                activateMesh(&quadFloor, &model_shader);
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3(0,-4,0));
+                model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                // model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+                model = glm::scale(model, glm::vec3(30.0f, 30.0f, 0.1f));
+                setMat4(model_shader, "model",  glm::value_ptr(model));
+                drawMesh(&quadFloor, &model_shader);
+            }
+        }
+            
 
 
         // Point Light Source
@@ -403,7 +413,7 @@ int main(void)
             setMat4(light_shader, "projection",  glm::value_ptr(projection));
             setMat4(light_shader, "view",  glm::value_ptr(view));
             activateMesh(&cubeMesh, &light_shader);
-            for (unsigned int i = 0; i < 4; i++)
+            for (unsigned int i = 0; i < ARRAY_SIZE(pointLightPositions); i++)
             {
                 glm::mat4 model = glm::mat4(1.0f);
                 model = glm::translate(model, pointLightPositions[i]);
@@ -456,10 +466,7 @@ int main(void)
         glfwPollEvents();
     }
     
-    // glDeleteVertexArrays(1, &VAO);
-    // glDeleteVertexArrays(1, &lightVAO);
-    // glDeleteBuffers(1, &VBO);
-    deleteShader(simple_rectangle);
+    deleteShader(model_shader);
 
     glfwTerminate();
     return 0;
