@@ -36,6 +36,10 @@ bool sRGB = true;
 // lighting
 glm::vec3 lightColor(0.6f, 0.6f, 0.6f);
 
+bool hdr = true;
+bool hdrKeyPressed = false;
+float exposure = 1.0f;
+
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
@@ -63,6 +67,28 @@ void processInput(GLFWwindow *window)
         sRGB = !sRGB;
     }
     lKeyPressedLastFrame = lKeyCurrentlyPressed;
+
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !hdrKeyPressed)
+    {
+        hdr = !hdr;
+        hdrKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
+    {
+        hdrKeyPressed = false;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+    {
+        if (exposure > 0.0f)
+            exposure -= 0.001f;
+        else
+            exposure = 0.0f;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+    {
+        exposure += 0.001f;
+    }
     
 }
 
@@ -100,7 +126,7 @@ void setupLightsForShader(const Shader& shader, const Light& dirLight, const Lig
         Light point = {
             .type = LIGHT_TYPE_POINT,
             .position = pointLightPositions[i],
-            .ambient = glm::vec3(1.0f),
+            .ambient = glm::vec3(0.0f),
             .diffuse = lightColor,
             .specular = glm::vec3(1.0f),
             .constant = 0.0f,
@@ -155,8 +181,6 @@ int main(void)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
     GLuint defaultFramebuffer = 0;  // Default framebuffer ID is always 0
-    GLint attachmentType;
-
     // Bind the default framebuffer explicitly (default framebuffer is always bound, but let's be explicit)
     glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
 
@@ -211,7 +235,7 @@ int main(void)
     printf("Renderer: %s\n", renderer);
     printf("Vendor: %s\n", vendor);
 
-            // framebuffer configuration
+    // framebuffer configuration
     // -------------------------
     unsigned int framebuffer;
     glGenFramebuffers(1, &framebuffer);
@@ -221,7 +245,7 @@ int main(void)
     screen_texture.type = TEXTURE_DIFFUSE;
     glGenTextures(1, &screen_texture.ID);
     glBindTexture(GL_TEXTURE_2D, screen_texture.ID);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, screen_texture.ID, 0);
@@ -235,9 +259,6 @@ int main(void)
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         printf("ERROR::FRAMEBUFFER:: Framebuffer is not complete!");
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-
-    
 
     // Create Shaders
     Shader model_shader = createShaderFromFile("shaders/vertex.glsl","shaders/fragment.glsl");
@@ -430,15 +451,13 @@ int main(void)
         .type = LIGHT_TYPE_DIRECTIONAL,
         .direction = glm::vec3(-0.2f, -1.0f, -0.3f),
         .ambient = glm::vec3(0.01f),
-        .diffuse = glm::vec3(0.05f),
+        .diffuse = glm::vec3(0.5f),
         .specular = glm::vec3(0.0f)
     };
     
     useShader(light_shader);
     setVec3(light_shader, "lightColor", glm::value_ptr(lightColor));
     useShader({0});
-
-
 
     while (!glfwWindowShouldClose(window))
     {
@@ -451,6 +470,9 @@ int main(void)
         lastFrame = currentFrame;
 
         processInput(window);
+
+        float near_plane = 1.0f, far_plane = 7.5f;
+        glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);  
         
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -475,7 +497,7 @@ int main(void)
         };
 
         const glm::vec3 OrinalVec = glm::vec3( 0.7f,  0.2f,  2.0f);
-        const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), (float)glfwGetTime(), glm::vec3(0.0f,1.0f,0.0f));
+        const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), currentFrame, glm::vec3(0.0f,1.0f,0.0f));
         pointLightPositions[0] = rot * glm::vec4(OrinalVec, 1.0f);
         setupLightsForShader(model_shader, dirLight, spot, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
 
@@ -497,7 +519,7 @@ int main(void)
                 model = glm::translate(model, cubePositions[i]);
                 float angle = 20.0f * i;
                 model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-                model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
+                model = glm::rotate(model, currentFrame, glm::vec3(0.0f, 0.0f, 1.0f));
                 model = glm::scale(model, glm::vec3(0.5f));
                 setMat4(model_shader, "model",  glm::value_ptr(model));
                 drawMesh(&cubeMesh, &model_shader);
@@ -588,8 +610,12 @@ int main(void)
         glClear(GL_COLOR_BUFFER_BIT);
 
         useShader(screen_shader);
-        glBindVertexArray(quadVAO);
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, screen_texture.ID);	// use the color attachment texture as the texture of the quad plane
+        setInt(screen_shader, "hdr", hdr);
+        printf("expose %f\n", exposure);
+        setFloat(screen_shader, "exposure", exposure);
+        glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glDisable(GL_FRAMEBUFFER_SRGB);
 
