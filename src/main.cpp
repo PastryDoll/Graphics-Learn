@@ -305,10 +305,13 @@ int main(void)
     };
 
     unsigned int cubemapTexture = loadCubemap(faces);
+    useShader(skybox_shader);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        setInt(skybox_shader, "skybox", 0);
+    useShader({0});
+    
 
     Model* model_bag = ModelInit("assets/models/backpack/backpack.obj");
-    useShader(skybox_shader);
-        setInt(skybox_shader, "skybox", 0);
 
     // Meshs Data
     Vertex cubeVertices[] = {
@@ -360,6 +363,15 @@ int main(void)
        22,21,20,20,23,22         // top
     }; 
 
+    unsigned int indicesSkyBox[] = {
+        2, 1, 0, 0, 3, 2,        // front
+        4, 5, 6, 6, 7, 4,        // back
+       10, 9, 8, 8,11,10,        // left
+       12,13,14,14,15,12,        // right
+       18,17,16,16,19,18,        // bottom
+       20,21,22,22,23,20         // top
+    };
+
     Vertex quadVertices[] = {
         // Position               // Normal              // Tex Coords
     
@@ -393,6 +405,7 @@ int main(void)
 
     useShader(screen_shader);
     setInt(screen_shader, "texture1", 0);
+    useShader({0});
     
     unsigned int quadIndices[] = {
         0, 1, 2,
@@ -406,6 +419,15 @@ int main(void)
         ARRAY_SIZE(indices),
         cubeTextures,
         ARRAY_SIZE(cubeTextures)
+    );
+
+    Mesh skyboxMesh( 
+        cubeVertices,
+        ARRAY_SIZE(cubeVertices),
+        indicesSkyBox,
+        ARRAY_SIZE(indicesSkyBox),
+        NULL,
+        0
     );
 
     Mesh quadGrass(
@@ -618,7 +640,7 @@ int main(void)
             const glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
             setMat4(skybox_shader, "projection",  glm::value_ptr(projection));
             setMat4(skybox_shader, "view",  glm::value_ptr(skybox_view));
-            drawMesh(&cubeMesh, &skybox_shader);
+            drawMesh(&skyboxMesh, &skybox_shader);
             glDepthFunc(GL_LESS);
         }
         
