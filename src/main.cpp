@@ -32,6 +32,7 @@ float lastX = (float)WINDOW_WIDTH/2.0f;
 float lastY = (float)WINDOW_HEIGHT/2.0f;
 bool firstMouse = true;
 bool sRGB = true;
+#define CAMERA_BINDING_POINT 0
 
 // lighting
 glm::vec3 lightColor(0.6f, 0.6f, 0.6f);
@@ -485,6 +486,15 @@ int main(void)
         glm::vec3( 0.0f,  0.0f, -3.0f),
     };
 
+    unsigned int uboMatrices;
+    glGenBuffers(1, &uboMatrices);
+  
+    glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+    glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), NULL, GL_DYNAMIC_DRAW );
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+  
+    glBindBufferRange(GL_UNIFORM_BUFFER, CAMERA_BINDING_POINT, uboMatrices, 0, 2 * sizeof(glm::mat4));
+
     // Static Shaders Uniforms
     Light dirLight = {
         .type = LIGHT_TYPE_DIRECTIONAL,
@@ -524,8 +534,12 @@ int main(void)
 
         processInput(window);
 
-        float near_plane = 1.0f, far_plane = 7.5f;
-        glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);  
+        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
+        glm::mat4 view = GetViewMatrix(camera);
+        glm::mat4 matrices[2] = { projection, view };
+        glBindBuffer(GL_UNIFORM_BUFFER, uboMatrices);
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(matrices), glm::value_ptr(matrices[0]));
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);  
         
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -538,9 +552,6 @@ int main(void)
         glCullFace(GL_BACK);  
         glFrontFace(GL_CCW);
         
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
-        glm::mat4 view = GetViewMatrix(camera);
-
         Light spot = {
             .type = LIGHT_TYPE_SPOT,
             .position = camera.Position,
@@ -565,8 +576,6 @@ int main(void)
 
             activateMesh(&cubeMesh, &model_shader);
             // Transformations View/Projection  -------------------------------------
-            setMat4(model_shader, "projection",  glm::value_ptr(projection));
-            setMat4(model_shader, "view",  glm::value_ptr(view));
             //------------------------------------------------------------------------
             
             setVec3(model_shader, "viewPos", glm::value_ptr(camera.Position));
@@ -608,8 +617,6 @@ int main(void)
         // Point Light Source
 
         useShader(light_shader);
-            setMat4(light_shader, "projection",  glm::value_ptr(projection));
-            setMat4(light_shader, "view",  glm::value_ptr(view));
             activateMesh(&cubeMesh, &light_shader);
             for (unsigned int i = 0; i < ARRAY_SIZE(pointLightPositions); i++)
             {
@@ -623,8 +630,6 @@ int main(void)
 
         {
             useShader(model_shader);
-                setMat4(model_shader, "projection",  glm::value_ptr(projection));
-                setMat4(model_shader, "view",  glm::value_ptr(view));
                 glm::mat4 model = glm::mat4(1.0f);
                 model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
                 model = glm::scale(model, glm::vec3(1.0f));
@@ -637,9 +642,6 @@ int main(void)
         {
             glDepthFunc(GL_LEQUAL);
             useShader(skybox_shader);
-            const glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
-            setMat4(skybox_shader, "projection",  glm::value_ptr(projection));
-            setMat4(skybox_shader, "view",  glm::value_ptr(skybox_view));
             drawMesh(&skyboxMesh, &skybox_shader);
             glDepthFunc(GL_LESS);
         }
@@ -647,8 +649,6 @@ int main(void)
         {
             useShader(window_shader);
             glDepthMask(GL_FALSE);
-                setMat4(window_shader, "projection",  glm::value_ptr(projection));
-                setMat4(window_shader, "view",  glm::value_ptr(view));
                 activateMesh(&quadWindow, &window_shader);
                 glm::mat4 model = glm::mat4(1.0f);
                 model = glm::translate(model, glm::vec3(-1.0,2.5,-4.0));
