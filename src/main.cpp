@@ -353,11 +353,11 @@ int main(void)
     
     unsigned int indices[] = {
         0, 1, 2, 2, 3, 0,        // front
-        4, 5, 6, 6, 7, 4,        // back
+        6, 5, 4, 4, 7, 6,        // back
         8, 9,10,10,11, 8,        // left
-       12,13,14,14,15,12,        // right
+       14,13,12,12,15,14,        // right
        16,17,18,18,19,16,        // bottom
-       20,21,22,22,23,20         // top
+       22,21,20,20,23,22         // top
     }; 
 
     Vertex quadVertices[] = {
@@ -512,6 +512,9 @@ int main(void)
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);  
+        glCullFace(GL_BACK);  
+        glFrontFace(GL_CCW);
         
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)screen_width / (float)screen_height, 0.1f, 100.0f);
         glm::mat4 view = GetViewMatrix(camera);
@@ -553,7 +556,7 @@ int main(void)
                 model = glm::translate(model, cubePositions[i]);
                 float angle = 20.0f * i;
                 model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-                model = glm::rotate(model, currentFrame, glm::vec3(0.0f, 0.0f, 1.0f));
+                // model = glm::rotate(model, currentFrame, glm::vec3(0.0f, 0.0f, 1.0f));
                 model = glm::scale(model, glm::vec3(0.5f));
                 setMat4(model_shader, "model",  glm::value_ptr(model));
                 drawMesh(&cubeMesh, &model_shader);
