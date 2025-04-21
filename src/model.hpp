@@ -32,13 +32,12 @@ struct Model
     char directory[256];
 };
 
-void DrawModel(Model* model, Shader* shader)
+void DrawModel(Model* model, Shader* shader, Texture* shadow, Texture* cubeShadow)
 {
     for(int mesh_idx = 0; mesh_idx < model->numMeshes; mesh_idx++)
     {
         Mesh* currMesh = model->meshes + mesh_idx;
-        activateMesh(currMesh, shader);
-        drawMesh(currMesh, shader);
+        drawMesh(currMesh, shader, shadow, cubeShadow);
     }
 
 }  

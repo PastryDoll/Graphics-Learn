@@ -66,18 +66,36 @@ static void setupMesh(Mesh* mesh) {
     // Texture Coordinates
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
-
+    
     glBindVertexArray(0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER,0);
 }
 
-void activateMesh(Mesh* mesh, Shader* shader)
+void activateMesh(Mesh* mesh, Shader* shader, Texture *shadow, Texture *cubeShadow)
 {
     unsigned int diffuseNr = 1;
     unsigned int specularNr = 1;
     char uniformName[128];
-
+    unsigned int offset = 0;
+    if (shadow)
+    {
+        glActiveTexture(GL_TEXTURE0 + offset);
+        setInt(*shader, "shadowMap", offset);
+        glBindTexture(GL_TEXTURE_2D, shadow->ID);
+        offset += 1;
+    }
+    if (cubeShadow)
+    {
+        glActiveTexture(GL_TEXTURE0 + offset);
+        setInt(*shader, "cubeShadowMap", offset);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubeShadow->ID);
+        offset += 1;
+    }
+    
     for (unsigned int i = 0; i < mesh->numTextures; i++) {
-        glActiveTexture(GL_TEXTURE0 + i);
+        unsigned int textUnit = shader->num_of_text_locs + i + offset;
+        glActiveTexture(GL_TEXTURE0 + textUnit);
 
         const char* name = g_texture_types_str[mesh->textures[i].type];
         char number[10];
@@ -90,14 +108,16 @@ void activateMesh(Mesh* mesh, Shader* shader)
 
         }
         snprintf(uniformName, sizeof(uniformName), "material.%s%s", name, number);
-        setInt(*shader, uniformName, i);
+        setInt(*shader, uniformName, textUnit);
 
         glBindTexture(GL_TEXTURE_2D, mesh->textures[i].ID);
     }
     glActiveTexture(GL_TEXTURE0);
 
+
 }
-void drawMesh(Mesh* mesh, Shader* shader) {
+void drawMesh(Mesh* mesh, Shader* shader, Texture *shadow, Texture *cubeShadow) {
+    activateMesh(mesh, shader, shadow, cubeShadow);
     glBindVertexArray(mesh->VAO);
     glDrawElements(GL_TRIANGLES, mesh->numIndices, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);

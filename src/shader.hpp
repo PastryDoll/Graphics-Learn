@@ -14,6 +14,7 @@
 struct Shader
 {
     unsigned int ID;
+    unsigned int num_of_text_locs = 0;
 };
   
 
@@ -81,42 +82,64 @@ void checkCompileErrors(unsigned int shader, const char* type) {
     }
 }
 
-Shader createShaderFromFile(const char* vertexPath, const char* fragmentPath) {
-    Shader shader = {0};
-    char* vertexCode = readFile(vertexPath);
-    char* fragmentCode = readFile(fragmentPath);
+Shader createShaderFromFile(const char* vertexPath, const char* fragmentPath, const char* geoPath) {
+   Shader shader = {0};
+   char* vertexCode = readFile(vertexPath);
+   char* fragmentCode = readFile(fragmentPath);
+   char* geometryCode = nullptr; 
+   
+   if (!vertexCode || !fragmentCode) {
+       fprintf(stderr, "ERROR::SHADER::FAILED_TO_READ_SHADER_FILES\n");
+       if (vertexCode) free(vertexCode);
+       if (fragmentCode) free(fragmentCode);
+       return shader; 
+   }
+   
+   unsigned int vertex, fragment, geometry;
+   vertex = glCreateShader(GL_VERTEX_SHADER);
+   glShaderSource(vertex, 1, (const char**)&vertexCode, NULL);
+   glCompileShader(vertex);
+   checkCompileErrors(vertex, "VERTEX");
+   
+   fragment = glCreateShader(GL_FRAGMENT_SHADER);
+   glShaderSource(fragment, 1, (const char**)&fragmentCode, NULL);
+   glCompileShader(fragment);
+   checkCompileErrors(fragment, "FRAGMENT");
+   
+   shader.ID = glCreateProgram();
+   glAttachShader(shader.ID, vertex);
+   glAttachShader(shader.ID, fragment);
+   
+   if (geoPath != nullptr)
+   {
+       geometryCode = readFile(geoPath);
+       if (geometryCode) { // Ensure geometryCode is valid before use
+           geometry = glCreateShader(GL_GEOMETRY_SHADER);
+           glShaderSource(geometry, 1, (const char**)&geometryCode, NULL);
+           glCompileShader(geometry);
+           checkCompileErrors(geometry, "GEOMETRY");
+           glAttachShader(shader.ID, geometry);
+       } else {
+           fprintf(stderr, "ERROR::SHADER::FAILED_TO_READ_GEOMETRY_SHADER_FILE\n");
+       }
+   }
+   
+   glLinkProgram(shader.ID);
+   checkCompileErrors(shader.ID, "PROGRAM");
+   
+   glDeleteShader(vertex);
+   glDeleteShader(fragment);
+   
+   free(vertexCode);
+   free(fragmentCode);
+   free(geometryCode);
+   
+   if (geoPath != nullptr)
+   {
+       glDeleteShader(geometry);
+   }
 
-    if (!vertexCode || !fragmentCode) {
-        fprintf(stderr, "ERROR::SHADER::FAILED_TO_READ_SHADER_FILES\n");
-        if (vertexCode) free(vertexCode);
-        if (fragmentCode) free(fragmentCode);
-        return shader; 
-    }
-
-    unsigned int vertex, fragment;
-    vertex = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex, 1, (const char**)&vertexCode, NULL);
-    glCompileShader(vertex);
-    checkCompileErrors(vertex, "VERTEX");
-
-    fragment = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment, 1, (const char**)&fragmentCode, NULL);
-    glCompileShader(fragment);
-    checkCompileErrors(fragment, "FRAGMENT");
-
-    shader.ID = glCreateProgram();
-    glAttachShader(shader.ID, vertex);
-    glAttachShader(shader.ID, fragment);
-    glLinkProgram(shader.ID);
-    checkCompileErrors(shader.ID, "PROGRAM");
-
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-
-    free(vertexCode);
-    free(fragmentCode);
-
-    return shader;
+   return shader;
 }
 
 void useShader(Shader shader) {
@@ -149,6 +172,14 @@ void setMat4(Shader shader, const char* name, const float* mat) {
 
 void deleteShader(Shader shader) {
     glDeleteProgram(shader.ID);
+}
+
+unsigned int attachTexturetoLoc(Shader* shader, const char* loc_name)
+{
+    useShader(*shader);
+    setInt(*shader, loc_name, shader->num_of_text_locs);
+    useShader({0});
+    return shader->num_of_text_locs++;
 }
 
 #endif
