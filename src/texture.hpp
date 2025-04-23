@@ -38,7 +38,7 @@ Texture createTextureFromFile(const char * path, const char *directory, int text
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(flip_uv);
     unsigned char *data = stbi_load(filename, &width, &height, &nrChannels, 0);
-    stbi_set_flip_vertically_on_load(!flip_uv);
+    stbi_set_flip_vertically_on_load(false);
 
     printf("Loading image with um of channes %u\n",nrChannels);
     if (data)

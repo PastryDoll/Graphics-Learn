@@ -66,6 +66,10 @@ static void setupMesh(Mesh* mesh) {
     // Texture Coordinates
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+
+    // Targent Coordinates
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Tangent));
     
     glBindVertexArray(0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
@@ -76,6 +80,7 @@ void activateMesh(Mesh* mesh, Shader* shader, Texture *shadow, Texture *cubeShad
 {
     unsigned int diffuseNr = 1;
     unsigned int specularNr = 1;
+    unsigned int normalNr = 1;
     char uniformName[128];
     unsigned int offset = 0;
     if (shadow)
@@ -100,17 +105,33 @@ void activateMesh(Mesh* mesh, Shader* shader, Texture *shadow, Texture *cubeShad
         const char* name = g_texture_types_str[mesh->textures[i].type];
         char number[10];
 
-        if (strcmp(name, "texture_diffuse") == 0) {
+        // Do this comps using the enum 
+        if (strcmp(name, "texture_diffuse") == 0)
+        {
             snprintf(number, sizeof(number), "%d", diffuseNr++);
-        } else if (strcmp(name, "texture_specular") == 0) {
+        } 
+        else if (strcmp(name, "texture_specular") == 0)
+        {
             snprintf(number, sizeof(number), "%d", specularNr++);
-            setFloat(*shader, "material.shininess", 32.0f);
+            setFloat(*shader, "material.shininess", 254.0f);
+
+        }
+        else if (strcmp(name, "texture_normal") == 0) 
+        {
+            snprintf(number, sizeof(number), "%d", normalNr++);
 
         }
         snprintf(uniformName, sizeof(uniformName), "material.%s%s", name, number);
         setInt(*shader, uniformName, textUnit);
-
         glBindTexture(GL_TEXTURE_2D, mesh->textures[i].ID);
+    }
+
+    if (normalNr == 1) { 
+        Texture mock_normal = createSingleColorTexture(TEXTURE_NORMAL, {0,0,1});
+        unsigned int textUnit = shader->num_of_text_locs + mesh->numTextures + offset;
+        glActiveTexture(GL_TEXTURE0 + textUnit);
+        setInt(*shader, "material.texture_normal1", textUnit);
+        glBindTexture(GL_TEXTURE_2D, mock_normal.ID);
     }
     glActiveTexture(GL_TEXTURE0);
 

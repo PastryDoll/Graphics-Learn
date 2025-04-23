@@ -5,6 +5,7 @@
 #include "mesh.hpp"
 #include "../thirdparty/glm/glm.hpp"
 
+bool useNormal = true; 
 enum PassType
 {
     SHADOW_PASS,
@@ -31,7 +32,7 @@ void setupLightsForShader(const Shader& shader, const Light& dirLight, const Lig
     }
 }
 
-void renderScene(Shader shader, Mesh* cubeMesh, Mesh* grassMesh, Mesh* floorMesh, glm::vec3* cubePositions, Texture* shadow, Texture* cubeShadow,  unsigned int pass_type)
+void renderScene(float currentFrame, Shader shader, Mesh* cubeMesh, Mesh* grassMesh, Mesh* floorMesh, Mesh* brickWall, glm::vec3* cubePositions, Texture* shadow, Texture* cubeShadow,  unsigned int pass_type)
 {
     useShader(shader);
     {        
@@ -42,7 +43,7 @@ void renderScene(Shader shader, Mesh* cubeMesh, Mesh* grassMesh, Mesh* floorMesh
             model = glm::translate(model, cubePositions[i]);
             float angle = 20.0f * i;
             model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-            // model = glm::rotate(model, currentFrame, glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::rotate(model, currentFrame, glm::vec3(0.0f, 1.0f, 0.0f));
             model = glm::scale(model, glm::vec3(0.5f));
             setMat4(shader, "model",  glm::value_ptr(model));
             drawMesh(cubeMesh, &shader, shadow, cubeShadow);
@@ -65,49 +66,61 @@ void renderScene(Shader shader, Mesh* cubeMesh, Mesh* grassMesh, Mesh* floorMesh
             setMat4(shader, "model",  glm::value_ptr(model));
             drawMesh(floorMesh, &shader, shadow, cubeShadow);
         }
+
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
+            model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+            // model = glm::rotate(model, glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::scale(model, glm::vec3(1.0f));
+            setMat4(shader, "model",  glm::value_ptr(model));
+            setBool(shader, "useNormalMap", useNormal);
+            drawMesh(brickWall,&shader,shadow, cubeShadow);
+            setBool(shader, "useNormalMap", false);
+        }
     }
 
 };
 
 // Meshs Data
 Vertex cubeVertices[] = {
-    // position           // normal            // tex coords
+    // position               // normal                // tex coords  // tangents
 
-    // Front face
-    {{-1.0f, -1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {0.0f, 0.0f}},
-    {{ 1.0f, -1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {1.0f, 0.0f}},
-    {{ 1.0f,  1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {1.0f, 1.0f}},
-    {{-1.0f,  1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {0.0f, 1.0f}},
+    // Front face (Z+)
+    {{-1.0f, -1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 1.0f, -1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 1.0f,  1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{-1.0f,  1.0f,  1.0f},   {0.0f,  0.0f,  1.0f},   {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
 
-    // Back face
-    {{-1.0f, -1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {1.0f, 0.0f}},
-    {{ 1.0f, -1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {0.0f, 0.0f}},
-    {{ 1.0f,  1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {0.0f, 1.0f}},
-    {{-1.0f,  1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {1.0f, 1.0f}},
+    // Back face (Z-)
+    {{-1.0f, -1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
+    {{ 1.0f, -1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}},
+    {{ 1.0f,  1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
+    {{-1.0f,  1.0f, -1.0f},   {0.0f,  0.0f, -1.0f},   {1.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}},
 
-    // Left face
-    {{-1.0f, -1.0f, -1.0f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
-    {{-1.0f, -1.0f,  1.0f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
-    {{-1.0f,  1.0f,  1.0f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
-    {{-1.0f,  1.0f, -1.0f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
+    // Left face (X-)
+    {{-1.0f, -1.0f, -1.0f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+    {{-1.0f, -1.0f,  1.0f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+    {{-1.0f,  1.0f,  1.0f},  {-1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+    {{-1.0f,  1.0f, -1.0f},  {-1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
 
-    // Right face
-        {{1.0f, -1.0f, -1.0f},   {1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}},
-        {{1.0f, -1.0f,  1.0f},   {1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}},
-        {{1.0f,  1.0f,  1.0f},   {1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}},
-        {{1.0f,  1.0f, -1.0f},   {1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}},
+    // Right face (X+)
+    {{1.0f, -1.0f, -1.0f},   {1.0f,  0.0f,  0.0f},   {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
+    {{1.0f, -1.0f,  1.0f},   {1.0f,  0.0f,  0.0f},   {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
+    {{1.0f,  1.0f,  1.0f},   {1.0f,  0.0f,  0.0f},   {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
+    {{1.0f,  1.0f, -1.0f},   {1.0f,  0.0f,  0.0f},   {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}},
 
-    // Bottom face
-    {{-1.0f, -1.0f, -1.0f},   {0.0f, -1.0f,  0.0f},   {0.0f, 1.0f}},
-    {{ 1.0f, -1.0f, -1.0f},   {0.0f, -1.0f,  0.0f},   {1.0f, 1.0f}},
-    {{ 1.0f, -1.0f,  1.0f},   {0.0f, -1.0f,  0.0f},   {1.0f, 0.0f}},
-    {{-1.0f, -1.0f,  1.0f},   {0.0f, -1.0f,  0.0f},   {0.0f, 0.0f}},
+    // Bottom face (Y-)
+    {{-1.0f, -1.0f, -1.0f},   {0.0f, -1.0f,  0.0f},   {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 1.0f, -1.0f, -1.0f},   {0.0f, -1.0f,  0.0f},   {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 1.0f, -1.0f,  1.0f},   {0.0f, -1.0f,  0.0f},   {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{-1.0f, -1.0f,  1.0f},   {0.0f, -1.0f,  0.0f},   {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 
-    // Top face
-    {{-1.0f,  1.0f, -1.0f},   {0.0f,  1.0f,  0.0f},   {0.0f, 0.0f}},
-    {{ 1.0f,  1.0f, -1.0f},   {0.0f,  1.0f,  0.0f},   {1.0f, 0.0f}},
-    {{ 1.0f,  1.0f,  1.0f},   {0.0f,  1.0f,  0.0f},   {1.0f, 1.0f}},
-    {{-1.0f,  1.0f,  1.0f},   {0.0f,  1.0f,  0.0f},   {0.0f, 1.0f}},
+    // Top face (Y+)
+    {{-1.0f,  1.0f, -1.0f},   {0.0f,  1.0f,  0.0f},   {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 1.0f,  1.0f, -1.0f},   {0.0f,  1.0f,  0.0f},   {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{ 1.0f,  1.0f,  1.0f},   {0.0f,  1.0f,  0.0f},   {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+    {{-1.0f,  1.0f,  1.0f},   {0.0f,  1.0f,  0.0f},   {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
 };
 
 unsigned int indices[] = {
@@ -129,12 +142,11 @@ unsigned int indicesSkyBox[] = {
 };
 
 Vertex quadVertices[] = {
-    // Position               // Normal              // Tex Coords
-
-    {{-1.0f, -1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {0.0f, 0.0f}},  // Bottom-left
-    {{ 1.0f, -1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {1.0f, 0.0f}},  // Bottom-right
-    {{ 1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {1.0f, 1.0f}},  // Top-right
-    {{-1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {0.0f, 1.0f}},  // Top-left
+    // Position               // Normal              // Tex Coords       // Tangent
+    {{-1.0f, -1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {0.0f, 0.0f},     {1.0f, 0.0f, 0.0f}},  // Bottom-left  
+    {{ 1.0f, -1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {1.0f, 0.0f},     {1.0f, 0.0f, 0.0f}},  // Bottom-right
+    {{ 1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {1.0f, 1.0f},     {1.0f, 0.0f, 0.0f}},  // Top-right
+    {{-1.0f,  1.0f, 0.0f},     {0.0f, 0.0f, 1.0f},     {0.0f, 1.0f},     {1.0f, 0.0f, 0.0f}},  // Top-left
 };
 
 float quadVerticess[] = { // vertex attributes for a quad that fills the entire screen in Normalized Device Coordinates.

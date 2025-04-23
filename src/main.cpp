@@ -84,7 +84,7 @@ void processInput(GLFWwindow *window)
 
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !hdrKeyPressed)
     {
-        hdr = !hdr;
+        useNormal = !useNormal;
         hdrKeyPressed = true;
     }
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
@@ -260,8 +260,14 @@ int main(void)
     Texture crate = createTextureFromFile("container2.png", "assets/textures",TEXTURE_DIFFUSE,true);
     Texture crate_specular = createTextureFromFile("container2_specular.png", "assets/textures", TEXTURE_SPECULAR, true);
     Texture grass[] = {createTextureFromFile("grass.png", "assets/textures",TEXTURE_DIFFUSE, true)};
-    Texture wood_floor[] = {createTextureFromFile("wood.png", "assets/textures",TEXTURE_DIFFUSE, true), createSingleColorTexture(TEXTURE_SPECULAR, {20,20,20})};
+    Texture wood_floor[] = {createTextureFromFile("wood.png", "assets/textures",TEXTURE_DIFFUSE, true), createSingleColorTexture(TEXTURE_SPECULAR, {200,200,200})};
     Texture window_red[] = {createTextureFromFile("blending_transparent_window.png", "assets/textures",TEXTURE_DIFFUSE, true)};
+    Texture brick_wall[] = {
+        createTextureFromFile("brickwall.jpg", "assets/textures",TEXTURE_DIFFUSE, true),
+        createTextureFromFile("brickwall_normal.jpg", "assets/textures",TEXTURE_NORMAL, true),
+        createSingleColorTexture(TEXTURE_SPECULAR, {20,20,20}),
+        
+    };
     Texture cubeTextures[] = {
         { crate},
         { crate_specular},
@@ -345,6 +351,14 @@ int main(void)
         wood_floor,
         ARRAY_SIZE(wood_floor)
     );
+    Mesh quadBrickWall(
+        quadVertices,
+        ARRAY_SIZE(quadVertices),
+        quadIndices,
+        ARRAY_SIZE(quadIndices),
+        brick_wall,
+        ARRAY_SIZE(brick_wall)
+    );
     Mesh quadScreen(
         quadVertices,
         ARRAY_SIZE(quadVertices),
@@ -369,7 +383,7 @@ int main(void)
     };
 
     glm::vec3 pointLightPositions[] = {
-        glm::vec3( 0.7f,  0.2f,  2.0f),
+        glm::vec3( 1.3f,  2.0f,  2.0f),
         // glm::vec3( 2.3f, -3.3f, -4.0f),
         // glm::vec3(-4.0f,  2.0f, -12.0f),
         // glm::vec3( 0.0f,  0.0f, -3.0f),
@@ -467,9 +481,9 @@ int main(void)
             .outerCutOff = glm::cos(glm::radians(15.0f))
         };
 
-        static const glm::vec3 OrinalVec = pointLightPositions[0];
-        const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), currentFrame, glm::vec3(0.0f,1.0f,0.0f));
-        pointLightPositions[0] = rot * glm::vec4(OrinalVec, 1.0f);
+        // static const glm::vec3 OrinalVec = pointLightPositions[0];
+        // const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), currentFrame, glm::vec3(0.0f,1.0f,0.0f));
+        // pointLightPositions[0] = rot * glm::vec4(OrinalVec, 1.0f);
         
         // Omni shadow
         useShader(depthcube_shader);
@@ -484,17 +498,17 @@ int main(void)
             }
             setFloat(depthcube_shader, "far_plane", far_plane);
             setVec3(depthcube_shader, "lightPos", glm::value_ptr(pointLightPositions[0]));
-            renderScene(depthcube_shader, &cubeMesh, &quadGrass, &quadFloor, cubePositions, nullptr, nullptr, SHADOW_PASS);
-            {
-                useShader(depthcube_shader);
-                    glm::mat4 model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
-                    model = glm::scale(model, glm::vec3(1.0f));
-                    setMat4(depthcube_shader, "model",  glm::value_ptr(model));
-                    setLight("spotLight", spot, depthcube_shader);
+            renderScene(currentFrame, depthcube_shader, &cubeMesh, &quadGrass, &quadFloor, &quadBrickWall, cubePositions, nullptr, nullptr, SHADOW_PASS);
+            // {
+            //     useShader(depthcube_shader);
+            //         glm::mat4 model = glm::mat4(1.0f);
+            //         model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
+            //         model = glm::scale(model, glm::vec3(1.0f));
+            //         setMat4(depthcube_shader, "model",  glm::value_ptr(model));
+            //         setLight("spotLight", spot, depthcube_shader);
         
-                    DrawModel(model_bag,&depthcube_shader,nullptr, nullptr);
-            }
+            //         DrawModel(model_bag,&depthcube_shader,nullptr, nullptr);
+            // }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -526,11 +540,11 @@ int main(void)
         setupLightsForShader(model_shader, dirLight, spot, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
         setVec3(model_shader, "viewPos", glm::value_ptr(camera.Position));
         setVec3(model_shader, "lightPos", glm::value_ptr(pointLightPositions[0]));
-        setMat4(model_shader, "lightSpaceMatrix", glm::value_ptr(lightSpaceMatrix));
         setInt(model_shader, "shadows", true); // enable/disable shadows by pressing 'SPACE'
         setFloat(model_shader, "far_plane", far_plane);
+        setBool(model_shader, "useNormalMap", false);
 
-        renderScene(model_shader, &cubeMesh, &quadGrass, &quadFloor, cubePositions, nullptr, &depthCubeTexture, DRAW_PASS);
+        renderScene(currentFrame, model_shader, &cubeMesh, &quadGrass, &quadFloor, &quadBrickWall ,cubePositions, nullptr, &depthCubeTexture, DRAW_PASS);
 
         // Point Light Source
 
@@ -548,13 +562,17 @@ int main(void)
         {
             useShader(model_shader);
                 glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
+                model = glm::translate(model, glm::vec3( 2.0f,  0.0f,  2.0f));
                 model = glm::scale(model, glm::vec3(1.0f));
                 setMat4(model_shader, "model",  glm::value_ptr(model));
                 setLight("spotLight", spot, model_shader);
-    
+                setBool(model_shader, "useNormalMap", useNormal);
+
                 DrawModel(model_bag,&model_shader,nullptr, &depthCubeTexture);
+                setBool(model_shader, "useNormalMap", false);
+
         }
+
         
         {
             glDepthFunc(GL_LEQUAL);
@@ -613,20 +631,3 @@ int main(void)
     glfwTerminate();
     return 0;
 }
-
-
-        // useShader(model_shader);
-        // setMat4(model_shader,"projection", glm::value_ptr(projection));
-        // setMat4(model_shader,"view", glm::value_ptr(view));
-        // set light uniforms
-        // setVec3(model_shader,"viewPos", glm::value_ptr(camera.Position));
-        // setVec3(model_shader,"lightPos", glm::value_ptr(lightPos));
-        // setMat4(model_shader,"lightSpaceMatrix", glm::value_ptr(lightSpaceMatrix));
-        // glActiveTexture(GL_TEXTURE0);
-        // glBindTexture(GL_TEXTURE_2D, wood_floor[0].ID);
-        // glActiveTexture(GL_TEXTURE2);
-        // glBindTexture(GL_TEXTURE_2D, depthMap);
-        // renderScene(model_shader);
-
-        // render Depth map to quad for visual debugging
-        // ---------------------------------------------

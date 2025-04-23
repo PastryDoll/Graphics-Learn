@@ -7,6 +7,7 @@ const int LIGHT_TYPE_SPOTLIGHT   = 2;
 struct Material {
     sampler2D texture_diffuse1;
 	sampler2D texture_specular1;
+	sampler2D texture_normal1;
     float     shininess;
 }; 
 
@@ -49,6 +50,10 @@ in VS_OUT {
     vec3 FragPos;
     vec3 Normal;
     vec2 TexCoords;
+    vec3 Tangent;
+    vec3 TangentLightPos;
+    vec3 TangentViewPos;
+    vec3 TangentFragPos;
 } fs_in;
 
 out vec4 FragColor;
@@ -61,6 +66,7 @@ uniform vec3 viewPos;
 
 uniform float far_plane;
 uniform bool shadows;
+uniform bool useNormalMap;
 
 #define NR_POINT_LIGHTS 1  // TODO fix this needs to be dynamic
 uniform PointLight pointLights[NR_POINT_LIGHTS];
@@ -80,8 +86,6 @@ float ShadowCalculation(vec3 fragPos)
 {
     vec3 fragToLight = fragPos - lightPos;
     float currentDepth = length(fragToLight);
-    // if (currentDepth >= far_plane)
-        // return -1.0; 
     float shadow = 0.0;
     float bias = 0.15;
     int samples = 20;
@@ -103,7 +107,7 @@ float ShadowCalculation(vec3 fragPos)
 // calculates the color when using a point light.
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec4 diffuseTextureColor, vec4 specularTextureColor)
 {
-    vec3 lightDir = normalize(light.position - fragPos);
+    vec3 lightDir = normalize(fs_in.TangentLightPos - fs_in.TangentFragPos);
     // diffuse shading
     float diff = max(dot(normal, lightDir), 0.0);
     // specular shading
@@ -112,7 +116,7 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, v
     if (diff == 0.0) {spec = 0.0;}
 
     // attenuation
-    float distance = length(light.position - fragPos);
+    float distance = length(fs_in.TangentLightPos - fs_in.TangentFragPos);
     float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));    
     // calculate lighting
     vec3 ambient = light.ambient * vec3(diffuseTextureColor);
@@ -134,8 +138,20 @@ void main()
     vec4 diffuseTextureColor = texture(material.texture_diffuse1, fs_in.TexCoords);
     vec4 specularTextureColor = texture(material.texture_specular1, fs_in.TexCoords);
 
-    vec3 normal = normalize(fs_in.Normal);
-    vec3 viewDir = normalize(viewPos - fs_in.FragPos);
+
+    vec3 normal;
+
+    if (useNormalMap) {
+        normal = texture(material.texture_normal1, fs_in.TexCoords).rgb;
+        normal = normalize(normal * 2.0 - 1.0); // Transform from [0,1] to [-1,1]
+
+    } else {
+
+        normal = normalize(fs_in.Normal);
+
+    }
+
+    vec3 viewDir = normalize(fs_in.TangentViewPos - fs_in.TangentFragPos);
     vec3 result = vec3(0.0);
 
     for(int i = 0; i < NR_POINT_LIGHTS; i++)
