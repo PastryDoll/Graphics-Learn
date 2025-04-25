@@ -4,14 +4,15 @@
 
 struct FrameBuffer {
     unsigned int fbo;
-    unsigned int colorTexture;
     unsigned int rbo;
+    unsigned int colorTexture;
+    unsigned int brightTexture;
 };
 
-void CheckFramebufferStatus()
+void CheckFramebufferStatus(int line)
 {
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    printf("ERROR::FRAMEBUFFER:: Framebuffer is not complete! (%s:%d)\n", __FILE__, __LINE__);
+    printf("ERROR::FRAMEBUFFER:: Framebuffer is not complete! (%s:%d)\n", __FILE__, line);
 }
 
 void GenerateFBO(FrameBuffer* fb)
@@ -33,7 +34,7 @@ Texture prepare16fScreenTextureBoundToFBO(FrameBuffer* fb, Shader* screen_shader
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, screen_texture.ID, 0);
 
-    CheckFramebufferStatus();
+    CheckFramebufferStatus(__LINE__);
 
     *texture_loc = attachTexturetoLoc(screen_shader, uniform_text_name);
     printf("screen_shader.num_of_text_locs %u\n",screen_shader->num_of_text_locs);
@@ -65,7 +66,7 @@ Texture prepareDepthTextureBoundToFBO(FrameBuffer* depthMapFBO, Shader* scene_sh
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
 
-    CheckFramebufferStatus();
+    CheckFramebufferStatus(__LINE__);
     
     // *texture_loc = attachTexturetoLoc(scene_shader, uniform_text_name);
     printf("scene(model) shader %u\n", scene_shader->num_of_text_locs);
@@ -89,7 +90,42 @@ void prepare16fMSAAFrameBuffer(FrameBuffer* fb, unsigned int width, unsigned int
     glBindRenderbuffer(GL_RENDERBUFFER, fb->rbo);
     glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, width, height);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, fb->rbo);
-    CheckFramebufferStatus();
+    CheckFramebufferStatus(__LINE__);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
+void prepare16fMSAABloomFrameBuffer(FrameBuffer* fb, unsigned int width, unsigned int height)
+{
+    GenerateFBO(fb);
+    glBindFramebuffer(GL_FRAMEBUFFER, fb->fbo);
+
+    // First color attachment (multisampled)
+    glGenTextures(1, &fb->colorTexture);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, fb->colorTexture);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGBA16F, width, height, GL_TRUE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, fb->colorTexture, 0);
+    
+    // Depth/stencil attachment (multisampled)
+    glGenRenderbuffers(1, &fb->rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, fb->rbo);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, fb->rbo);
+    
+    // Second color attachment (also multisampled)
+    glGenTextures(1, &fb->brightTexture);
+    glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, fb->brightTexture);
+    glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGBA16F, width, height, GL_TRUE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D_MULTISAMPLE, fb->brightTexture, 0);
+    
+    unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+    glDrawBuffers(2, attachments);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+        printf("Framebuffer incomplete: %d\n", status);
     
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, 0);
@@ -149,5 +185,34 @@ Texture prepareCubeDepthTextureBoundToFBO(FrameBuffer* depthMapFBO, Shader* scen
 
     return depthCubemap;
 }
+
+void prepareBlurringFrameBuffers(FrameBuffer* blurring_FBO_1, FrameBuffer* blurring_FBO_2, unsigned int width, unsigned int height)
+{
+    unsigned int pingpongColorbuffers[2];
+    glGenFramebuffers(1, &blurring_FBO_1->fbo);
+    glGenFramebuffers(1, &blurring_FBO_2->fbo);
+    glGenTextures(2, pingpongColorbuffers);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, blurring_FBO_1->fbo);
+    glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[0]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorbuffers[0], 0);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, blurring_FBO_2->fbo);
+    glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[1]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorbuffers[1], 0);
+    
+    CheckFramebufferStatus(__LINE__);
+}
+
 
 #endif

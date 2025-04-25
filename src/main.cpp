@@ -37,12 +37,13 @@ bool sRGB = true;
 #define CAMERA_BINDING_POINT 0
 
 // lighting
-glm::vec3 lightColor(0.8f, 0.8f, 0.8f);
-glm::vec3 lightPos(-2.0f, 6.0f, -1.0f);
+glm::vec3 lightColor(1.8f, 1.8f, 1.8f);
 
 bool hdr = true;
 bool hdrKeyPressed = false;
 float exposure = 1.0f;
+bool useShadows = true;
+bool useShadowsKeyPressed = false;
 
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -90,6 +91,15 @@ void processInput(GLFWwindow *window)
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
     {
         hdrKeyPressed = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS && !useShadowsKeyPressed)
+    {
+        useShadows = !useShadows;
+        useShadowsKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE)
+    {
+        useShadowsKeyPressed = false;
     }
 
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
@@ -172,7 +182,7 @@ int main(void)
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
-    CheckFramebufferStatus();
+    CheckFramebufferStatus(__LINE__);
     
     // Query using OpenGL
     {
@@ -226,6 +236,7 @@ int main(void)
     Shader depth_shader = createShaderFromFile("shaders/depthmap_vertex.glsl","shaders/depthmap_frag.glsl", nullptr);
     Shader depthcube_shader = createShaderFromFile("shaders/depthcube_vertex.glsl","shaders/depthcube_frag.glsl", "shaders/depthcube_geo.glsl");
     Shader depth_debug_shader = createShaderFromFile("shaders/debug_depth_vertex.glsl","shaders/debug_depth_frag.glsl", nullptr);
+    Shader blur_shader = createShaderFromFile("shaders/blur_vertex.glsl","shaders/blur_frag.glsl", nullptr);
     
 
     // // configure MSAA framebuffer
@@ -233,9 +244,17 @@ int main(void)
 
     FrameBuffer msaa_hdr_frame_buffer = {0};
     // prepare16fMSAAFrameBuffer(&msaa_hdr_frame_buffer, WINDOW_WIDTH, WINDOW_HEIGHT);
-    prepare16fMSAAFrameBuffer(&msaa_hdr_frame_buffer, WINDOW_WIDTH, WINDOW_HEIGHT);
+    prepare16fMSAABloomFrameBuffer(&msaa_hdr_frame_buffer, WINDOW_WIDTH, WINDOW_HEIGHT);
+    
+    FrameBuffer blurring_FBO_1 = {0};
+    FrameBuffer blurring_FBO_2 = {0};
+    // prepare16fMSAAFrameBuffer(&msaa_hdr_frame_buffer, WINDOW_WIDTH, WINDOW_HEIGHT);
+    prepareBlurringFrameBuffers(&blurring_FBO_1, &blurring_FBO_2, WINDOW_WIDTH, WINDOW_HEIGHT);
 
     FrameBuffer intermediaryFBO = {0};
+    GenerateFBO(&intermediaryFBO);
+
+    FrameBuffer intermediaryBlurFBO = {0};
     GenerateFBO(&intermediaryFBO);
 
     unsigned int screen_shader_texture_loc;
@@ -260,7 +279,7 @@ int main(void)
     Texture crate = createTextureFromFile("container2.png", "assets/textures",TEXTURE_DIFFUSE,true);
     Texture crate_specular = createTextureFromFile("container2_specular.png", "assets/textures", TEXTURE_SPECULAR, true);
     Texture grass[] = {createTextureFromFile("grass.png", "assets/textures",TEXTURE_DIFFUSE, true)};
-    Texture wood_floor[] = {createTextureFromFile("wood.png", "assets/textures",TEXTURE_DIFFUSE, true), createSingleColorTexture(TEXTURE_SPECULAR, {200,200,200})};
+    Texture wood_floor[] = {createTextureFromFile("wood.png", "assets/textures",TEXTURE_DIFFUSE, true), createSingleColorTexture(TEXTURE_SPECULAR, {200,200,200}),FLAT_NORMAL_TEXTURE};
     Texture window_red[] = {createTextureFromFile("blending_transparent_window.png", "assets/textures",TEXTURE_DIFFUSE, true)};
     Texture brick_wall[] = {
         createTextureFromFile("brickwall.jpg", "assets/textures",TEXTURE_DIFFUSE, true),
@@ -271,6 +290,7 @@ int main(void)
     Texture cubeTextures[] = {
         { crate},
         { crate_specular},
+        { FLAT_NORMAL_TEXTURE}
     };
 
     // Declare an array of 6 file paths for the cubemap textures
@@ -383,7 +403,7 @@ int main(void)
     };
 
     glm::vec3 pointLightPositions[] = {
-        glm::vec3( 1.3f,  2.0f,  2.0f),
+        glm::vec3( -1.3f,  2.0f,  -3.0f),
         // glm::vec3( 2.3f, -3.3f, -4.0f),
         // glm::vec3(-4.0f,  2.0f, -12.0f),
         // glm::vec3( 0.0f,  0.0f, -3.0f),
@@ -453,7 +473,7 @@ int main(void)
         glm::mat4 lightSpaceMatrix;
         float near_plane = 0.1f, far_plane = 30.0f;
         lightProjection = glm::ortho(-20.0f, 20.0f, -20.0f, 20.0f, near_plane, far_plane);
-        lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
+        lightView = glm::lookAt(pointLightPositions[0], glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
         lightSpaceMatrix = lightProjection * lightView;
 
         glm::mat4 shadowPerpectiveProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_plane, far_plane);
@@ -498,35 +518,10 @@ int main(void)
             }
             setFloat(depthcube_shader, "far_plane", far_plane);
             setVec3(depthcube_shader, "lightPos", glm::value_ptr(pointLightPositions[0]));
-            renderScene(currentFrame, depthcube_shader, &cubeMesh, &quadGrass, &quadFloor, &quadBrickWall, cubePositions, nullptr, nullptr, SHADOW_PASS);
-            // {
-            //     useShader(depthcube_shader);
-            //         glm::mat4 model = glm::mat4(1.0f);
-            //         model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
-            //         model = glm::scale(model, glm::vec3(1.0f));
-            //         setMat4(depthcube_shader, "model",  glm::value_ptr(model));
-            //         setLight("spotLight", spot, depthcube_shader);
-        
-            //         DrawModel(model_bag,&depthcube_shader,nullptr, nullptr);
-            // }
+            renderScene(currentFrame, model_bag, depthcube_shader, &cubeMesh, &quadGrass, &quadFloor, &quadBrickWall, cubePositions, nullptr, nullptr, SHADOW_PASS);
+
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // Directional shadow
-        // useShader(depth_shader);
-        // setMat4(depth_shader,"lightSpaceMatrix", glm::value_ptr(lightSpaceMatrix));
-        // glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-        // glEnable(GL_DEPTH_TEST);
-        // glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO.fbo);
-        // glClear(GL_DEPTH_BUFFER_BIT);
-        // renderScene(depth_shader, &cubeMesh, &quadGrass, &quadFloor, cubePositions, nullptr, SHADOW_PASS);
-        // glm::mat4 model = glm::mat4(1.0f);
-        //     model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
-        //     model = glm::scale(model, glm::vec3(1.0f));
-        //     setMat4(depth_shader, "model",  glm::value_ptr(model));
-        //     DrawModel(model_bag,&depth_shader, nullptr,);
-        
-
 
         glBindFramebuffer(GL_FRAMEBUFFER, msaa_hdr_frame_buffer.fbo);
         glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -540,65 +535,52 @@ int main(void)
         setupLightsForShader(model_shader, dirLight, spot, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
         setVec3(model_shader, "viewPos", glm::value_ptr(camera.Position));
         setVec3(model_shader, "lightPos", glm::value_ptr(pointLightPositions[0]));
-        setInt(model_shader, "shadows", true); // enable/disable shadows by pressing 'SPACE'
+        setInt(model_shader, "shadows", useShadows); // enable/disable shadows by pressing 'SPACE'
         setFloat(model_shader, "far_plane", far_plane);
         setBool(model_shader, "useNormalMap", false);
 
-        renderScene(currentFrame, model_shader, &cubeMesh, &quadGrass, &quadFloor, &quadBrickWall ,cubePositions, nullptr, &depthCubeTexture, DRAW_PASS);
+        renderScene(currentFrame, model_bag, model_shader, &cubeMesh, &quadGrass, &quadFloor, &quadBrickWall ,cubePositions, nullptr, &depthCubeTexture, DRAW_PASS);
 
         // Point Light Source
-
-        useShader(light_shader);
-            for (unsigned int i = 0; i < ARRAY_SIZE(pointLightPositions); i++)
-            {
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, pointLightPositions[i]);
-                model = glm::scale(model, glm::vec3(0.1f)); // Make it a smaller cube
-                setMat4(light_shader, "model",  glm::value_ptr(model));
-                drawMesh(&cubeMesh, &light_shader,nullptr, nullptr);
-
-            }
-
-        {
-            useShader(model_shader);
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, glm::vec3( 2.0f,  0.0f,  2.0f));
-                model = glm::scale(model, glm::vec3(1.0f));
-                setMat4(model_shader, "model",  glm::value_ptr(model));
-                setLight("spotLight", spot, model_shader);
-                setBool(model_shader, "useNormalMap", useNormal);
-
-                DrawModel(model_bag,&model_shader,nullptr, &depthCubeTexture);
-                setBool(model_shader, "useNormalMap", false);
-
-        }
-
         
         {
+            useShader(light_shader);
+                for (unsigned int i = 0; i < ARRAY_SIZE(pointLightPositions); i++)
+                {
+                    glm::mat4 model = glm::mat4(1.0f);
+                    model = glm::translate(model, pointLightPositions[i]);
+                    model = glm::scale(model, glm::vec3(0.1f)); // Make it a smaller cube
+                    setMat4(light_shader, "model",  glm::value_ptr(model));
+                    drawMesh(&cubeMesh, &light_shader,nullptr, nullptr);
+    
+                }
+        }
+        
+        {
+            useShader(skybox_shader);
             glDepthFunc(GL_LEQUAL);
             glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-            useShader(skybox_shader);
             drawMesh(&skyboxMesh, &skybox_shader, nullptr, nullptr);
             glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
             glDepthFunc(GL_LESS);
         }
         
-        {
-            useShader(window_shader);
-            glDepthMask(GL_FALSE);
-                glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, glm::vec3(-1.0,2.5,-4.0));
-                model = glm::rotate(model, glm::radians(75.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                setMat4(window_shader, "model",  glm::value_ptr(model));
-                drawMesh(&quadWindow, &window_shader, nullptr, nullptr);
-            glDepthMask(GL_TRUE);
-        }
-
-
+        // {
+        //     useShader(window_shader);
+        //     glDepthMask(GL_FALSE);
+        //     glm::mat4 model = glm::mat4(1.0f);
+        //     model = glm::translate(model, glm::vec3(-1.0,2.5,-4.0));
+        //     model = glm::rotate(model, glm::radians(75.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+        //     setMat4(window_shader, "model",  glm::value_ptr(model));
+        //     drawMesh(&quadWindow, &window_shader, nullptr, nullptr);
+        //     glDepthMask(GL_TRUE);
+        // }
 
         // 2. now blit multisampled buffer(s) to normal colorbuffer of intermediate FBO. Image is stored in screenTexture
         glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_hdr_frame_buffer.fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, intermediaryFBO.fbo);
+        glReadBuffer(GL_COLOR_ATTACHMENT0);
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
         glBlitFramebuffer(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
         // // // now bind back to default framebuffer and draw a quad plane with the attached framebuffer color texture

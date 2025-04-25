@@ -20,7 +20,7 @@ void setupLightsForShader(const Shader& shader, const Light& dirLight, const Lig
         Light point = {
             .type = LIGHT_TYPE_POINT,
             .position = pointLightPositions[i],
-            .ambient = glm::vec3(0.3f),
+            .ambient = glm::vec3(0.0f),
             .diffuse = lightColor,
             .specular = glm::vec3(1.0f),
             .constant = 0.0f,
@@ -32,10 +32,11 @@ void setupLightsForShader(const Shader& shader, const Light& dirLight, const Lig
     }
 }
 
-void renderScene(float currentFrame, Shader shader, Mesh* cubeMesh, Mesh* grassMesh, Mesh* floorMesh, Mesh* brickWall, glm::vec3* cubePositions, Texture* shadow, Texture* cubeShadow,  unsigned int pass_type)
+void renderScene(float currentFrame, Model * bag, Shader shader, Mesh* cubeMesh, Mesh* grassMesh, Mesh* floorMesh, Mesh* brickWall, glm::vec3* cubePositions, Texture* shadow, Texture* cubeShadow,  unsigned int pass_type)
 {
     useShader(shader);
     {        
+        setBool(shader, "useNormalMap", useNormal);
         if (pass_type == SHADOW_PASS) {glCullFace(GL_FRONT);};
         for(unsigned int i = 0; i < 10; i++)
         {
@@ -50,13 +51,13 @@ void renderScene(float currentFrame, Shader shader, Mesh* cubeMesh, Mesh* grassM
         }
         if (pass_type == SHADOW_PASS) {glCullFace(GL_BACK);};
         
-        {
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(-3,-3.90 + 1.0,0));
-            model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-            setMat4(shader, "model",  glm::value_ptr(model));
-            drawMesh(grassMesh, &shader, shadow, cubeShadow);
-        }
+        // {
+        //     glm::mat4 model = glm::mat4(1.0f);
+        //     model = glm::translate(model, glm::vec3(-3,-3.90 + 1.0,0));
+        //     model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        //     setMat4(shader, "model",  glm::value_ptr(model));
+        //     drawMesh(grassMesh, &shader, shadow, cubeShadow);
+        // }
         {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0,-4,0));
@@ -74,11 +75,18 @@ void renderScene(float currentFrame, Shader shader, Mesh* cubeMesh, Mesh* grassM
             // model = glm::rotate(model, glm::radians(45.0f), glm::vec3(0.0f, 0.0f, 1.0f));
             model = glm::scale(model, glm::vec3(1.0f));
             setMat4(shader, "model",  glm::value_ptr(model));
-            setBool(shader, "useNormalMap", useNormal);
             drawMesh(brickWall,&shader,shadow, cubeShadow);
-            setBool(shader, "useNormalMap", false);
+        }
+
+        {
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, glm::vec3( 2.0f,  2.0f,  3.0f));
+                model = glm::scale(model, glm::vec3(1.0f));
+                setMat4(shader, "model",  glm::value_ptr(model));
+                DrawModel(bag,&shader,nullptr, cubeShadow);
         }
     }
+    setBool(shader, "useNormalMap", false);
 
 };
 

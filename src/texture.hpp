@@ -9,6 +9,8 @@
 
 #include <glad/glad.h>
 
+#define FLAT_NORMAL_TEXTURE createSingleColorTexture(TEXTURE_NORMAL, {128,128,255})
+
 enum Texture_Types {
     TEXTURE_DIFFUSE,
     TEXTURE_SPECULAR,

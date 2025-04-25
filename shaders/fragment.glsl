@@ -1,5 +1,8 @@
 #version 460 core
 
+layout (location = 0) out vec4 FragColor;
+layout (location = 1) out vec4 BrightColor;
+
 const int LIGHT_TYPE_DIRECTIONAL = 0;
 const int LIGHT_TYPE_POSITIONAL  = 1;
 const int LIGHT_TYPE_SPOTLIGHT   = 2;
@@ -56,8 +59,6 @@ in VS_OUT {
     vec3 TangentFragPos;
 } fs_in;
 
-out vec4 FragColor;
-
 uniform Material material;
 uniform sampler2D shadowMap;
 uniform samplerCube cubeShadowMap;
@@ -82,14 +83,14 @@ vec3 gridSamplingDisk[20] = vec3[]
    vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
 );
 
-float ShadowCalculation(vec3 fragPos)
+float ShadowCalculation()
 {
-    vec3 fragToLight = fragPos - lightPos;
+    vec3 fragToLight = fs_in.FragPos - lightPos;
     float currentDepth = length(fragToLight);
     float shadow = 0.0;
     float bias = 0.15;
     int samples = 20;
-    float viewDistance = length(viewPos - fragPos);
+    float viewDistance = length(viewPos - fs_in.FragPos);
     float diskRadius = (1.0 + (viewDistance / far_plane)) / 25.0;
     for(int i = 0; i < samples; ++i)
     {
@@ -105,7 +106,7 @@ float ShadowCalculation(vec3 fragPos)
 }
 
 // calculates the color when using a point light.
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec4 diffuseTextureColor, vec4 specularTextureColor)
+vec3 CalcPointLight(PointLight light, vec3 normal, vec3 viewDir, vec4 diffuseTextureColor, vec4 specularTextureColor)
 {
     vec3 lightDir = normalize(fs_in.TangentLightPos - fs_in.TangentFragPos);
     // diffuse shading
@@ -116,8 +117,8 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, v
     if (diff == 0.0) {spec = 0.0;}
 
     // attenuation
-    float distance = length(fs_in.TangentLightPos - fs_in.TangentFragPos);
-    float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));    
+    float distance = length(lightPos - fs_in.FragPos);
+    float attenuation = 1.0 /  (1.0 * (distance * distance));    
     // calculate lighting
     vec3 ambient = light.ambient * vec3(diffuseTextureColor);
     vec3 diffuse = light.diffuse * diff * vec3(diffuseTextureColor);
@@ -127,9 +128,10 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, v
     diffuse *= attenuation;
     specular *= attenuation;
 
-    float shadow = shadows ? ShadowCalculation(fs_in.FragPos) : 0.0;   
+    float shadow = shadows ? ShadowCalculation() : 0.0;   
 
     return (ambient + (1 - shadow) * (diffuse + specular));
+    // return vec3(shadow);
 }
 
 
@@ -156,8 +158,14 @@ void main()
 
     for(int i = 0; i < NR_POINT_LIGHTS; i++)
     {
-        result += CalcPointLight(pointLights[i], normal, fs_in.FragPos, viewDir, diffuseTextureColor, specularTextureColor);
+        result += CalcPointLight(pointLights[i], normal, viewDir, diffuseTextureColor, specularTextureColor);
     }
+
+    float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
+    if(brightness > 1.0)
+        BrightColor = vec4(result, 1.0);
+    else
+        BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 
     FragColor = vec4(result, 1.0);
 }
