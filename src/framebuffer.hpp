@@ -211,6 +211,9 @@ void prepareBlurringFrameBuffers(FrameBuffer* blurring_FBO_1, FrameBuffer* blurr
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorbuffers[1], 0);
     
+    blurring_FBO_1->colorTexture = pingpongColorbuffers[0];
+    blurring_FBO_2->colorTexture = pingpongColorbuffers[1];
+
     CheckFramebufferStatus(__LINE__);
 }
 

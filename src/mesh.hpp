@@ -144,4 +144,5 @@ void drawMesh(Mesh* mesh, Shader* shader, Texture *shadow, Texture *cubeShadow) 
     glBindVertexArray(0);
 }
 
+
 #endif

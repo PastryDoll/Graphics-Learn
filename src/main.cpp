@@ -37,9 +37,11 @@ bool sRGB = true;
 #define CAMERA_BINDING_POINT 0
 
 // lighting
-glm::vec3 lightColor(1.8f, 1.8f, 1.8f);
+glm::vec3 lightColor(10.8f, 10.8f, 10.8f);
 
 bool hdr = true;
+bool bloom = true;
+bool bloomKeyPressed = false;
 bool hdrKeyPressed = false;
 float exposure = 1.0f;
 bool useShadows = true;
@@ -53,6 +55,7 @@ static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 void processInput(GLFWwindow *window)
 {
     static bool lKeyPressedLastFrame = false;
+    static bool bKeyPressedLastFrame = false;
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -83,6 +86,13 @@ void processInput(GLFWwindow *window)
     }
     lKeyPressedLastFrame = lKeyCurrentlyPressed;
 
+    bool bKeyCurrentlyPressed = glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS;
+    if (bKeyCurrentlyPressed && !bKeyPressedLastFrame)
+    {
+        bloom = !bloom;
+    }
+    bKeyPressedLastFrame = bKeyCurrentlyPressed;
+
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !hdrKeyPressed)
     {
         useNormal = !useNormal;
@@ -92,6 +102,7 @@ void processInput(GLFWwindow *window)
     {
         hdrKeyPressed = false;
     }
+
     if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS && !useShadowsKeyPressed)
     {
         useShadows = !useShadows;
@@ -246,15 +257,16 @@ int main(void)
     // prepare16fMSAAFrameBuffer(&msaa_hdr_frame_buffer, WINDOW_WIDTH, WINDOW_HEIGHT);
     prepare16fMSAABloomFrameBuffer(&msaa_hdr_frame_buffer, WINDOW_WIDTH, WINDOW_HEIGHT);
     
-    FrameBuffer blurring_FBO_1 = {0};
-    FrameBuffer blurring_FBO_2 = {0};
-    // prepare16fMSAAFrameBuffer(&msaa_hdr_frame_buffer, WINDOW_WIDTH, WINDOW_HEIGHT);
-    prepareBlurringFrameBuffers(&blurring_FBO_1, &blurring_FBO_2, WINDOW_WIDTH, WINDOW_HEIGHT);
-
-    FrameBuffer intermediaryFBO = {0};
-    GenerateFBO(&intermediaryFBO);
+    FrameBuffer pingpongFBO[2] = {0, 0};
+    prepareBlurringFrameBuffers(&pingpongFBO[0], &pingpongFBO[1], WINDOW_WIDTH, WINDOW_HEIGHT);
 
     FrameBuffer intermediaryBlurFBO = {0};
+    GenerateFBO(&intermediaryBlurFBO);
+    
+    unsigned int blur_texture_loc;
+    Texture blur_texture = prepare16fScreenTextureBoundToFBO(&intermediaryBlurFBO, &blur_shader, "image", &blur_texture_loc, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+    FrameBuffer intermediaryFBO = {0};
     GenerateFBO(&intermediaryFBO);
 
     unsigned int screen_shader_texture_loc;
@@ -288,9 +300,9 @@ int main(void)
         
     };
     Texture cubeTextures[] = {
-        { crate},
-        { crate_specular},
-        { FLAT_NORMAL_TEXTURE}
+        {crate},
+        {crate_specular},
+        {FLAT_NORMAL_TEXTURE}
     };
 
     // Declare an array of 6 file paths for the cubemap textures
@@ -311,17 +323,6 @@ int main(void)
     useShader({0});
 
     Model* model_bag = ModelInit("assets/models/backpack/backpack.obj");
-
-    unsigned int quadVAO, quadVBO;
-    glGenVertexArrays(1, &quadVAO);
-    glGenBuffers(1, &quadVBO);
-    glBindVertexArray(quadVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerticess), &quadVerticess, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     
     unsigned int quadIndices[] = {
         0, 1, 2,
@@ -505,7 +506,7 @@ int main(void)
         // const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), currentFrame, glm::vec3(0.0f,1.0f,0.0f));
         // pointLightPositions[0] = rot * glm::vec4(OrinalVec, 1.0f);
         
-        // Omni shadow
+        // Rendedr Omni shadow ////////////////////////////////////////////////////
         useShader(depthcube_shader);
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, depthCubeMapFBO.fbo);
@@ -520,7 +521,7 @@ int main(void)
             setVec3(depthcube_shader, "lightPos", glm::value_ptr(pointLightPositions[0]));
             renderScene(currentFrame, model_bag, depthcube_shader, &cubeMesh, &quadGrass, &quadFloor, &quadBrickWall, cubePositions, nullptr, nullptr, SHADOW_PASS);
 
-
+        // Render Scene /////////////////////////////////////////////////////////
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         glBindFramebuffer(GL_FRAMEBUFFER, msaa_hdr_frame_buffer.fbo);
@@ -576,8 +577,34 @@ int main(void)
         //     glDepthMask(GL_TRUE);
         // }
 
-        // 2. now blit multisampled buffer(s) to normal colorbuffer of intermediate FBO. Image is stored in screenTexture
+        // 2. blur bright fragments with two-pass Gaussian Blur 
+        // --------------------------------------------------
+
         glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_hdr_frame_buffer.fbo);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, intermediaryBlurFBO.fbo);
+        glReadBuffer(GL_COLOR_ATTACHMENT1);
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
+        glBlitFramebuffer(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+        bool horizontal = true, first_iteration = true;
+        unsigned int amount = 10;
+        useShader(blur_shader);
+        glActiveTexture(GL_TEXTURE0 + blur_texture_loc);
+        for (unsigned int i = 0; i < amount; i++)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal].fbo);
+            setInt(blur_shader, "horizontal", horizontal);
+            glBindTexture(GL_TEXTURE_2D, first_iteration ? blur_texture.ID : pingpongFBO[!horizontal].colorTexture);  // bind texture of other framebuffer (or scene if first iteration)
+            renderQuad();
+            horizontal = !horizontal;
+            if (first_iteration)
+                first_iteration = false;
+        }
+        glActiveTexture(GL_TEXTURE0);
+
+
+        // 2. now blit multisampled buffer(s) to normal colorbuffer of intermediate FBO. Image is stored in screenTexture
+        glBindFramebuffer(GL_READ_FRAMEBUFFER,  msaa_hdr_frame_buffer.fbo);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, intermediaryFBO.fbo);
         glReadBuffer(GL_COLOR_ATTACHMENT0);
         glDrawBuffer(GL_COLOR_ATTACHMENT0);
@@ -590,15 +617,21 @@ int main(void)
         glClear(GL_COLOR_BUFFER_BIT);
         if (sRGB){glEnable(GL_FRAMEBUFFER_SRGB);}
         else{glDisable(GL_FRAMEBUFFER_SRGB);}
+
         useShader(screen_shader);
+        setInt(screen_shader, "bloomBlur", screen_shader_texture_loc + 1 );
         glActiveTexture(GL_TEXTURE0 + screen_shader_texture_loc);
         glBindTexture(GL_TEXTURE_2D, screen_texture.ID);	// use the color attachment texture as the texture of the quad plane
+        glActiveTexture(GL_TEXTURE0 + screen_shader_texture_loc + 1 );
+        glBindTexture(GL_TEXTURE_2D, pingpongFBO[!horizontal].colorTexture);	// use the color attachment texture as the texture of the quad plane
         setInt(screen_shader, "hdr", hdr);
+        setInt(screen_shader, "bloom", bloom);
+        printf("Bloom %u\n", bloom);
         setFloat(screen_shader, "exposure", exposure);
-        glBindVertexArray(quadVAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        
+        renderQuad();
         glDisable(GL_FRAMEBUFFER_SRGB);
-        glBindVertexArray(0);
+        
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D,0);
         useShader({0});
