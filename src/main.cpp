@@ -10,6 +10,10 @@
 #include <stdio.h>
 #include <math.h>
 #include "../thirdparty/glm/gtc/type_ptr.hpp"
+#include "../thirdparty/imgui/imgui.h"
+#include "../thirdparty/imgui/backends/imgui_impl_glfw.h"
+#include "../thirdparty/imgui/backends/imgui_impl_opengl3.h"
+#include "../thirdparty/imgui/imgui.h"
 
 // TODO: Find better way to force NVIDIA GPU
 // Substack: "you should use WGL_NV_gpu_affinity"
@@ -187,6 +191,18 @@ int main(void)
 		printf("Failed to initialize GLAD\n");
         return -1;
     }
+
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init();
+
     // Openg GL Config
     glViewport(0, 0, WINDOW_WIDTH , WINDOW_HEIGHT);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -435,6 +451,12 @@ int main(void)
 
     while (!glfwWindowShouldClose(window))
     {
+        glfwPollEvents();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::ShowDemoWindow(); // Show demo window! :)
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(1.0f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -636,9 +658,9 @@ int main(void)
         glBindTexture(GL_TEXTURE_2D,0);
         useShader({0});
 
-
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
-        glfwPollEvents();
     }
     
     //deleteShader(model_shader);
