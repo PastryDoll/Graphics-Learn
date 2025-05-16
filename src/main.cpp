@@ -6,7 +6,8 @@
 #include "model.hpp"
 #include "framebuffer.hpp"
 #include "scene.hpp"
-#include "glfw_callbacks.hpp"
+#include "render.hpp"
+#include "input.hpp"
 #include <stdio.h>
 #include <math.h>
 #include "../thirdparty/glm/gtc/type_ptr.hpp"
@@ -32,129 +33,25 @@ unsigned int planeVAO;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-// camera
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
-float lastX = (float)WINDOW_WIDTH/2.0f;
-float lastY = (float)WINDOW_HEIGHT/2.0f;
-bool firstMouse = true;
-bool sRGB = true;
+// Init Render State
+RenderState renderState =  {
+    .sRGB = true,
+    .bloom = true,
+    .useNormal = true,
+    .useShadows = true,
+    .hdr = true,
+    .grabMouse = true,
+    .exposure = 1.0f,
+};
+
 #define CAMERA_BINDING_POINT 0
 
 // lighting
 glm::vec3 lightColor(10.8f, 10.8f, 10.8f);
 
-bool hdr = true;
-bool bloom = true;
-bool bloomKeyPressed = false;
-bool hdrKeyPressed = false;
-float exposure = 1.0f;
-bool useShadows = true;
-bool useShadowsKeyPressed = false;
-
 static void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
-}
-
-void processInput(GLFWwindow *window)
-{
-    static bool lKeyPressedLastFrame = false;
-    static bool bKeyPressedLastFrame = false;
-
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    {
-        ProcessKeyboard(camera,FORWARD, deltaTime);
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    {
-        ProcessKeyboard(camera,BACKWARD, deltaTime);
-    }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    {
-        ProcessKeyboard(camera,LEFT, deltaTime);
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    {
-        ProcessKeyboard(camera,RIGHT, deltaTime);
-    }
-
-
-    
-    bool lKeyCurrentlyPressed = glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS;
-    if (lKeyCurrentlyPressed && !lKeyPressedLastFrame)
-    {
-        sRGB = !sRGB;
-    }
-    lKeyPressedLastFrame = lKeyCurrentlyPressed;
-
-    bool bKeyCurrentlyPressed = glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS;
-    if (bKeyCurrentlyPressed && !bKeyPressedLastFrame)
-    {
-        bloom = !bloom;
-    }
-    bKeyPressedLastFrame = bKeyCurrentlyPressed;
-
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !hdrKeyPressed)
-    {
-        useNormal = !useNormal;
-        hdrKeyPressed = true;
-    }
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
-    {
-        hdrKeyPressed = false;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS && !useShadowsKeyPressed)
-    {
-        useShadows = !useShadows;
-        useShadowsKeyPressed = true;
-    }
-    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_RELEASE)
-    {
-        useShadowsKeyPressed = false;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-    {
-        if (exposure > 0.0f)
-            exposure -= 0.001f;
-        else
-            exposure = 0.0f;
-    }
-    else if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-    {
-        exposure += 0.001f;
-    }
-    
-}
-
-void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
-{
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
-
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; 
-
-    lastX = xpos;
-    lastY = ypos;
-
-    ProcessMouseMovement(camera, xoffset, yoffset);
-}
-
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    ProcessMouseScroll(camera, static_cast<float>(yoffset));
 }
 
 int main(void)
@@ -184,13 +81,17 @@ int main(void)
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
     glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);  
+    // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);  
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
 		printf("Failed to initialize GLAD\n");
         return -1;
     }
+
+    // Setup Input Manager
+    InputManager inputManager;
+    initInputManager(&inputManager);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -452,6 +353,13 @@ int main(void)
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+        updateInputManager(window, &inputManager);
+
+        float currentFrame = static_cast<float>(glfwGetTime());
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+        processInput(window, &camera, &renderState, inputManager, deltaTime);
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -461,15 +369,9 @@ int main(void)
         glClearColor(1.0f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        processInput(window);
 
         int screen_width, screen_height;
         glfwGetFramebufferSize(window, &screen_width, &screen_height); // TODO: maybe we can do this only when changes happen on the callback
-
-        float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-
 
         static int frameCount = 0;
         static float fpsTimer = 0.0f;
@@ -558,7 +460,7 @@ int main(void)
         setupLightsForShader(model_shader, dirLight, spot, lightColor, pointLightPositions, ARRAY_SIZE(pointLightPositions));
         setVec3(model_shader, "viewPos", glm::value_ptr(camera.Position));
         setVec3(model_shader, "lightPos", glm::value_ptr(pointLightPositions[0]));
-        setInt(model_shader, "shadows", useShadows); // enable/disable shadows by pressing 'SPACE'
+        setInt(model_shader, "shadows", renderState.useShadows); // enable/disable shadows by pressing 'SPACE'
         setFloat(model_shader, "far_plane", far_plane);
         setBool(model_shader, "useNormalMap", false);
 
@@ -637,7 +539,7 @@ int main(void)
         glDisable(GL_DEPTH_TEST); // disable depth test so screen-space quad isn't discarded due to depth test.
         glClearColor(0.0f, 1.0f, 1.0f, 1.0f); // set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
         glClear(GL_COLOR_BUFFER_BIT);
-        if (sRGB){glEnable(GL_FRAMEBUFFER_SRGB);}
+        if (renderState.sRGB){glEnable(GL_FRAMEBUFFER_SRGB);}
         else{glDisable(GL_FRAMEBUFFER_SRGB);}
 
         useShader(screen_shader);
@@ -646,10 +548,9 @@ int main(void)
         glBindTexture(GL_TEXTURE_2D, screen_texture.ID);	// use the color attachment texture as the texture of the quad plane
         glActiveTexture(GL_TEXTURE0 + screen_shader_texture_loc + 1 );
         glBindTexture(GL_TEXTURE_2D, pingpongFBO[!horizontal].colorTexture);	// use the color attachment texture as the texture of the quad plane
-        setInt(screen_shader, "hdr", hdr);
-        setInt(screen_shader, "bloom", bloom);
-        printf("Bloom %u\n", bloom);
-        setFloat(screen_shader, "exposure", exposure);
+        setInt(screen_shader, "hdr", renderState.hdr);
+        setInt(screen_shader, "bloom", renderState.bloom);
+        setFloat(screen_shader, "exposure", renderState.exposure);
         
         renderQuad();
         glDisable(GL_FRAMEBUFFER_SRGB);

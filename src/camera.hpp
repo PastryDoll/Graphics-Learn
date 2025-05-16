@@ -55,20 +55,23 @@ struct Camera {
     }
 };
 
+// Init Camera
+Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+
 glm::mat4 GetViewMatrix(const Camera& camera) {
     return glm::lookAt(camera.Position, camera.Position + camera.Front, camera.Up);
 }
 
-void ProcessKeyboard(Camera& camera, Camera_Movement direction, float deltaTime) {
-    float velocity = camera.MovementSpeed * deltaTime;
+void ProcessKeyboard(Camera* camera, Camera_Movement direction, float deltaTime) {
+    float velocity = camera->MovementSpeed * deltaTime;
     if (direction == FORWARD)
-        camera.Position += camera.Front * velocity;
+        camera->Position += camera->Front * velocity;
     if (direction == BACKWARD)
-        camera.Position -= camera.Front * velocity;
+        camera->Position -= camera->Front * velocity;
     if (direction == LEFT)
-        camera.Position -= camera.Right * velocity;
+        camera->Position -= camera->Right * velocity;
     if (direction == RIGHT)
-        camera.Position += camera.Right * velocity;
+        camera->Position += camera->Right * velocity;
 }
 
 void ProcessMouseMovement(Camera& camera, float xoffset, float yoffset, bool constrainPitch = true) {
