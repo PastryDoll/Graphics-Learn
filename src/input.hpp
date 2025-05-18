@@ -63,10 +63,10 @@ void processInput(GLFWwindow *window, Camera *camera, RenderState* renderState, 
     if (wasKeyPressed(inputManager, GLFW_KEY_B)) {renderState->bloom = !renderState->bloom;};
     if (wasKeyPressed(inputManager, GLFW_KEY_SPACE)) {renderState->useNormal = !renderState->useNormal;};
     if (wasKeyPressed(inputManager, GLFW_KEY_P)) {renderState->useShadows = !renderState->useShadows;};
-    if (wasKeyPressed(inputManager, GLFW_KEY_M)) {
+    if (wasKeyPressed(inputManager, GLFW_KEY_GRAVE_ACCENT)) {
 
-        renderState->grabMouse = !renderState->grabMouse;
-        if (renderState->grabMouse) {glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);}
+        renderState->devMode = !renderState->devMode;
+        if (!renderState->devMode) {glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);}
         else {glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);}
     };
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
@@ -85,28 +85,30 @@ void processInput(GLFWwindow *window, Camera *camera, RenderState* renderState, 
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
-    float xpos = static_cast<float>(xposIn);
-    float ypos = static_cast<float>(yposIn);
-
-    // float lastX = (float)WINDOW_WIDTH/2.0f;
-    // float lastY = (float)WINDOW_HEIGHT/2.0f;
-    static float lastX = 0;
-    static float lastY = 0;
-
-    if (firstMouse)
+    if (!renderState.devMode)
     {
+
+        float xpos = static_cast<float>(xposIn);
+        float ypos = static_cast<float>(yposIn);
+        
+        static float lastX = 0;
+        static float lastY = 0;
+    
+        if (firstMouse)
+        {
+            lastX = xpos;
+            lastY = ypos;
+            firstMouse = false;
+        }
+    
+        float xoffset = xpos - lastX;
+        float yoffset = lastY - ypos; 
+    
         lastX = xpos;
         lastY = ypos;
-        firstMouse = false;
+    
+        ProcessMouseMovement(camera, xoffset, yoffset);
     }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; 
-
-    lastX = xpos;
-    lastY = ypos;
-
-    ProcessMouseMovement(camera, xoffset, yoffset);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)

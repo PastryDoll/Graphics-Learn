@@ -8,13 +8,10 @@
 #include "scene.hpp"
 #include "render.hpp"
 #include "input.hpp"
+#include "dev_console.hpp"
 #include <stdio.h>
 #include <math.h>
 #include "../thirdparty/glm/gtc/type_ptr.hpp"
-#include "../thirdparty/imgui/imgui.h"
-#include "../thirdparty/imgui/backends/imgui_impl_glfw.h"
-#include "../thirdparty/imgui/backends/imgui_impl_opengl3.h"
-#include "../thirdparty/imgui/imgui.h"
 
 // TODO: Find better way to force NVIDIA GPU
 // Substack: "you should use WGL_NV_gpu_affinity"
@@ -32,17 +29,6 @@ extern "C" {
 unsigned int planeVAO;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
-
-// Init Render State
-RenderState renderState =  {
-    .sRGB = true,
-    .bloom = true,
-    .useNormal = true,
-    .useShadows = true,
-    .hdr = true,
-    .grabMouse = true,
-    .exposure = 1.0f,
-};
 
 #define CAMERA_BINDING_POINT 0
 
@@ -81,7 +67,7 @@ int main(void)
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
     glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
-    // glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);  
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);  
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
@@ -360,10 +346,13 @@ int main(void)
         lastFrame = currentFrame;
         processInput(window, &camera, &renderState, inputManager, deltaTime);
 
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        ImGui::ShowDemoWindow(); // Show demo window! :)
+        if (renderState.devMode)
+        {
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+            imgui_console(&renderState);
+        }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glClearColor(1.0f, 0.1f, 0.1f, 1.0f);
@@ -559,8 +548,11 @@ int main(void)
         glBindTexture(GL_TEXTURE_2D,0);
         useShader({0});
 
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        if (renderState.devMode)
+        {
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        }
         glfwSwapBuffers(window);
     }
     

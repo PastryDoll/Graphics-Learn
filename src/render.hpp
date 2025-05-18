@@ -8,8 +8,19 @@ struct RenderState
     bool useNormal;
     bool useShadows;
     bool hdr;
-    bool grabMouse;
+    bool devMode;
     float exposure;
+};
+
+// Init Render State
+RenderState renderState =  {
+    .sRGB = true,
+    .bloom = true,
+    .useNormal = true,
+    .useShadows = true,
+    .hdr = true,
+    .devMode = false,
+    .exposure = 1.0f,
 };
 
 #endif
